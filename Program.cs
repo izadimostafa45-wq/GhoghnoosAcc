@@ -142,7 +142,9 @@ app.MapPost("/api/accounting/entries", async Task<IResult> (
     var entry = new JournalEntry
     {
         DocumentNumber = $"JV-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
-        DocumentDate = request.EntryDate,
+        // The document date is entered as a calendar date, but Npgsql maps DateTime to timestamptz by default.
+        // Mark the submitted date as UTC so it can be stored safely in the existing schema.
+        DocumentDate = DateTime.SpecifyKind(request.EntryDate.Date, DateTimeKind.Utc),
         Description = request.Description?.Trim(),
         IsPosted = false,
         Lines = request.Lines!.Select(line => new JournalEntryLine
