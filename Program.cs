@@ -1,47 +1,192 @@
+using GhoghnoosAcc.Data;
+using GhoghnoosAcc.Models;
+using GhoghnoosAcc.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-// GHOGHNOOSACC_ACCOUNTING_VALIDATOR_REGISTRATION
-builder.Services.AddSingleton<GhoghnoosAcc.Services.JournalEntryValidator>();
+builder.Services.AddSingleton<JournalEntryValidator>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
-    builder.Services.AddDbContext<GhoghnoosAcc.Data.AppDbContext>(options =>
-        options.UseNpgsql(connectionString));
+    builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 }
 
-// Add services to the container.
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-
 app.UseRouting();
-
 app.UseAuthorization();
-
 app.MapStaticAssets();
-app.MapRazorPages()
-   .WithStaticAssets();
+app.MapRazorPages().WithStaticAssets();
 
-// GHOGHNOOSACC_ACCOUNTING_VALIDATOR_ENDPOINT
+app.MapGet("/api/accounting/status", () => Results.Ok(new
+{
+    application = "GhoghnoosAcc",
+    databaseConfigured = !string.IsNullOrWhiteSpace(connectionString),
+    persistence = string.IsNullOrWhiteSpace(connectionString) ? "NotConfigured" : "PostgreSQL"
+}));
+
 app.MapPost("/api/accounting/validate-entry",
-    (GhoghnoosAcc.Services.JournalEntryValidationRequest request,
-     GhoghnoosAcc.Services.JournalEntryValidator validator) =>
+    (JournalEntryValidationRequest request, JournalEntryValidator validator) =>
     {
         var result = validator.Validate(request);
-        return result.IsValid
-            ? Results.Ok(result)
-            : Results.BadRequest(result);
+        return result.IsValid ? Results.Ok(result) : Results.BadRequest(result);
     });
+
+app.MapGet("/api/accounting/accounts", async (IServiceProvider services) =>
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var accounts = await db.Accounts.AsNoTracking()
+        .OrderBy(x => x.Code)
+        .Select(x => new { x.Id, x.Code, x.Title, x.Type, x.IsActive })
+        .ToListAsync();
+    return Results.Ok(accounts);
+});
+
+app.MapPost("/api/accounting/accounts", async (CreateAccountRequest request, IServiceProvider services) =>
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+    if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Title))
+        return Results.BadRequest(new { message = "Account code and title are required." });
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var code = request.Code.Trim();
+    var title = request.Title.Trim();
+    if (await db.Accounts.AnyAsync(x => x.Code == code))
+        return Results.Conflict(new { message = "An account with this code already exists." });
+
+    var account = new Account
+    {
+        Code = code,
+        Title = title,
+        Type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim(),
+        IsActive = true
+    };
+    db.Accounts.Add(account);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/accounting/accounts/{account.Id}",
+        new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
+});
+
+app.MapGet("/api/accounting/entries", async (IServiceProvider services) =>
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var entries = await db.JournalEntries.AsNoTracking()
+        .OrderByDescending(x => x.DocumentDate)
+        .ThenByDescending(x => x.Id)
+        .Select(x => new
+        {
+            x.Id, x.DocumentNumber, x.DocumentDate, x.Description, x.IsPosted,
+            DebitTotal = x.Lines.Sum(line => (decimal?)line.Debit) ?? 0m,
+            CreditTotal = x.Lines.Sum(line => (decimal?)line.Credit) ?? 0m
+        })
+        .Take(200)
+        .ToListAsync();
+    return Results.Ok(entries);
+});
+
+app.MapPost("/api/accounting/entries", async (
+    JournalEntryValidationRequest request,
+    JournalEntryValidator validator,
+    IServiceProvider services) =>
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var validation = validator.Validate(request);
+    if (!validation.IsValid)
+        return Results.BadRequest(validation);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var names = request.Lines!.Select(x => x!.AccountName!.Trim()).Distinct().ToList();
+    var accounts = await db.Accounts
+        .Where(x => x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
+        .ToListAsync();
+
+    var accountMap = accounts
+        .SelectMany(a => new[] { (Key: a.Code, Account: a), (Key: a.Title, Account: a) })
+        .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.First().Account, StringComparer.OrdinalIgnoreCase);
+
+    var missing = names.Where(name => !accountMap.ContainsKey(name)).ToList();
+    if (missing.Count > 0)
+        return Results.BadRequest(new
+        {
+            message = "Create these accounts first, then submit the journal entry.",
+            missingAccounts = missing
+        });
+
+    var entry = new JournalEntry
+    {
+        DocumentNumber = $"JV-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+        DocumentDate = request.EntryDate,
+        Description = request.Description?.Trim(),
+        IsPosted = false,
+        Lines = request.Lines!.Select(line => new JournalEntryLine
+        {
+            AccountId = accountMap[line!.AccountName!.Trim()].Id,
+            Debit = line.Debit,
+            Credit = line.Credit
+        }).ToList()
+    };
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
+    db.JournalEntries.Add(entry);
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    return Results.Created($"/api/accounting/entries/{entry.Id}", new
+    {
+        entry.Id, entry.DocumentNumber, entry.DocumentDate, entry.Description,
+        entry.IsPosted, validation.DebitTotal, validation.CreditTotal
+    });
+});
+
+app.MapGet("/api/accounting/entries/{id:int}", async (int id, IServiceProvider services) =>
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var entry = await db.JournalEntries.AsNoTracking()
+        .Include(x => x.Lines)
+        .ThenInclude(x => x.Account)
+        .Where(x => x.Id == id)
+        .Select(x => new
+        {
+            x.Id, x.DocumentNumber, x.DocumentDate, x.Description, x.IsPosted,
+            Lines = x.Lines.Select(line => new
+            {
+                line.Id, line.AccountId, AccountCode = line.Account.Code,
+                AccountTitle = line.Account.Title, line.Debit, line.Credit, line.Description
+            })
+        })
+        .FirstOrDefaultAsync();
+
+    return entry is null ? Results.NotFound() : Results.Ok(entry);
+});
+
 app.Run();
