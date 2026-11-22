@@ -1,4 +1,13 @@
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    builder.Services.AddDbContext<GhoghnoosAcc.Data.AppDbContext>(options =>
+        options.UseNpgsql(connectionString));
+}
 
 // Add services to the container.
 builder.Services.AddRazorPages();
