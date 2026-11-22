@@ -108,7 +108,7 @@ app.MapGet("/api/accounting/entries", async Task<IResult> (IServiceProvider serv
     return Results.Ok(entries);
 });
 
-app.MapPost("/api/accounting/entries", async (
+app.MapPost("/api/accounting/entries", async Task<IResult> (
     JournalEntryValidationRequest request,
     JournalEntryValidator validator,
     IServiceProvider services) =>
