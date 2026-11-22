@@ -1,33 +1,31 @@
-﻿@page
+@page
 @model GhoghnoosAcc.Pages.Accounting.IndexModel
 @{
-    ViewData["Title"] = "Ø¨Ø±Ø±Ø³ÛŒ Ø³Ù†Ø¯ Ø­Ø³Ø§Ø¨Ø¯Ø§Ø±ÛŒ";
+    ViewData["Title"] = "ثبت سند حسابداری";
 }
 <div dir="rtl" class="accounting-entry">
-    <h1>Ø¨Ø±Ø±Ø³ÛŒ ØªØ±Ø§Ø² Ø³Ù†Ø¯ Ø­Ø³Ø§Ø¨Ø¯Ø§Ø±ÛŒ</h1>
-    <p class="intro">Ø§ÛŒÙ† ØµÙØ­Ù‡ Ø¬Ù…Ø¹ Ø¨Ø¯Ù‡Ú©Ø§Ø± Ùˆ Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø± Ø±Ø§ Ø¨Ø±Ø±Ø³ÛŒ Ù…ÛŒâ€ŒÚ©Ù†Ø¯. Ø¯Ø± Ø§ÛŒÙ† Ù…Ø±Ø­Ù„Ù‡ Ø³Ù†Ø¯ Ø¯Ø± Ù¾Ø§ÛŒÚ¯Ø§Ù‡ Ø¯Ø§Ø¯Ù‡ Ø°Ø®ÛŒØ±Ù‡ Ù†Ù…ÛŒâ€ŒØ´ÙˆØ¯.</p>
-
+    <h1>ثبت سند حسابداری</h1>
+    <p class="intro">تاریخ و شرح سند را وارد کنید. نام یا کد هر حساب باید قبلاً در صفحه <a href="/Accounting/Accounts">مدیریت حساب‌ها</a> ثبت شده باشد. فقط اسناد متوازن در PostgreSQL ذخیره می‌شوند.</p>
     <div class="toolbar">
-        <label>ØªØ§Ø±ÛŒØ® Ø³Ù†Ø¯ <input id="entryDate" type="date" /></label>
-        <label class="description">Ø´Ø±Ø­ Ø³Ù†Ø¯ <input id="description" type="text" maxlength="300" placeholder="Ø´Ø±Ø­ Ú©ÙˆØªØ§Ù‡ Ø³Ù†Ø¯" /></label>
+        <label>تاریخ سند <input id="entryDate" type="date" required /></label>
+        <label class="description">شرح سند <input id="description" type="text" maxlength="500" placeholder="شرح کوتاه سند" /></label>
     </div>
-
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Ø­Ø³Ø§Ø¨</th><th>Ø¨Ø¯Ù‡Ú©Ø§Ø±</th><th>Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø±</th><th></th></tr></thead>
+            <thead><tr><th>کد یا عنوان حساب</th><th>بدهکار</th><th>بستانکار</th><th></th></tr></thead>
             <tbody id="lines">
-                <tr><td><input aria-label="Ù†Ø§Ù… Ø­Ø³Ø§Ø¨ Ø±Ø¯ÛŒÙ Û±" class="account" value="ØµÙ†Ø¯ÙˆÙ‚" /></td><td><input aria-label="Ø¨Ø¯Ù‡Ú©Ø§Ø± Ø±Ø¯ÛŒÙ Û±" class="debit" type="number" min="0" step="0.01" value="100000" /></td><td><input aria-label="Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø± Ø±Ø¯ÛŒÙ Û±" class="credit" type="number" min="0" step="0.01" value="0" /></td><td><button type="button" class="remove" aria-label="Ø­Ø°Ù Ø±Ø¯ÛŒÙ">Ø­Ø°Ù</button></td></tr>
-                <tr><td><input aria-label="Ù†Ø§Ù… Ø­Ø³Ø§Ø¨ Ø±Ø¯ÛŒÙ Û²" class="account" value="Ø³Ø±Ù…Ø§ÛŒÙ‡" /></td><td><input aria-label="Ø¨Ø¯Ù‡Ú©Ø§Ø± Ø±Ø¯ÛŒÙ Û²" class="debit" type="number" min="0" step="0.01" value="0" /></td><td><input aria-label="Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø± Ø±Ø¯ÛŒÙ Û²" class="credit" type="number" min="0" step="0.01" value="100000" /></td><td><button type="button" class="remove" aria-label="Ø­Ø°Ù Ø±Ø¯ÛŒÙ">Ø­Ø°Ù</button></td></tr>
+                <tr><td><input aria-label="حساب ردیف اول" class="account" value="صندوق" /></td><td><input class="debit" type="number" min="0" step="0.01" value="100000" /></td><td><input class="credit" type="number" min="0" step="0.01" value="0" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
+                <tr><td><input aria-label="حساب ردیف دوم" class="account" value="سرمایه" /></td><td><input class="debit" type="number" min="0" step="0.01" value="0" /></td><td><input class="credit" type="number" min="0" step="0.01" value="100000" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
             </tbody>
         </table>
     </div>
     <div class="actions">
-        <button type="button" id="addLine" class="secondary">Ø§ÙØ²ÙˆØ¯Ù† Ø±Ø¯ÛŒÙ</button>
-        <button type="button" id="validate">Ø¨Ø±Ø±Ø³ÛŒ ØªØ±Ø§Ø² Ø³Ù†Ø¯</button>
+        <button type="button" id="addLine" class="secondary">افزودن ردیف</button>
+        <button type="button" id="validate">بررسی تراز</button>
+        <button type="button" id="save">ذخیره سند در PostgreSQL</button>
     </div>
     <section id="result" class="result" aria-live="polite" hidden></section>
 </div>
-
 <style>
 .accounting-entry{max-width:1000px;margin:24px auto;padding:24px;color:#1f2937;font-family:Tahoma,Arial,sans-serif}
 .accounting-entry h1{font-size:1.7rem;margin-bottom:10px}.intro{color:#596579;line-height:1.9}
@@ -40,23 +38,17 @@
 .accounting-entry button.secondary{background:#475569}.accounting-entry button.remove{background:#e2e8f0;color:#334155;padding:8px}
 .result{margin-top:18px;padding:16px;border:1px solid #cbd5e1;border-radius:10px;line-height:2;white-space:pre-line}
 .result.good{border-color:#16a34a;background:#f0fdf4}.result.bad{border-color:#dc2626;background:#fef2f2}
-@@media(max-width:600px){.accounting-entry{padding:12px}.accounting-entry h1{font-size:1.35rem}}
 </style>
-
 <script>
 (() => {
     const body = document.getElementById('lines');
     const result = document.getElementById('result');
     const today = new Date();
-    document.getElementById('entryDate').value =
-        `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    document.getElementById('entryDate').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
     function addRow(account = '', debit = '0', credit = '0') {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input aria-label="Ù†Ø§Ù… Ø­Ø³Ø§Ø¨" class="account" maxlength="150"></td>
-          <td><input aria-label="Ø¨Ø¯Ù‡Ú©Ø§Ø±" class="debit" type="number" min="0" step="0.01"></td>
-          <td><input aria-label="Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø±" class="credit" type="number" min="0" step="0.01"></td>
-          <td><button type="button" class="remove" aria-label="Ø­Ø°Ù Ø±Ø¯ÛŒÙ">Ø­Ø°Ù</button></td>`;
+        tr.innerHTML = '<td><input aria-label="کد یا عنوان حساب" class="account" maxlength="200"></td><td><input class="debit" type="number" min="0" step="0.01"></td><td><input class="credit" type="number" min="0" step="0.01"></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td>';
         tr.querySelector('.account').value = account;
         tr.querySelector('.debit').value = debit;
         tr.querySelector('.credit').value = credit;
@@ -66,37 +58,42 @@
     body.addEventListener('click', e => {
         if (e.target.classList.contains('remove')) {
             if (body.rows.length > 2) e.target.closest('tr').remove();
-            else show('Ø³Ù†Ø¯ Ø¨Ø§ÛŒØ¯ Ø­Ø¯Ø§Ù‚Ù„ Ø¯Ùˆ Ø±Ø¯ÛŒÙ Ø¯Ø§Ø´ØªÙ‡ Ø¨Ø§Ø´Ø¯.', false);
+            else show('سند باید حداقل دو ردیف داشته باشد.', false);
         }
     });
     function show(message, good, data) {
         result.hidden = false;
         result.className = 'result ' + (good ? 'good' : 'bad');
-        result.textContent = message + (data ? `\nØ¬Ù…Ø¹ Ø¨Ø¯Ù‡Ú©Ø§Ø±: ${Number(data.debitTotal).toLocaleString('fa-IR')}\nØ¬Ù…Ø¹ Ø¨Ø³ØªØ§Ù†Ú©Ø§Ø±: ${Number(data.creditTotal).toLocaleString('fa-IR')}\nØ§Ø®ØªÙ„Ø§Ù: ${Number(data.difference).toLocaleString('fa-IR')}` : '');
+        const totals = data && data.debitTotal !== undefined
+            ? `\nجمع بدهکار: ${Number(data.debitTotal).toLocaleString('fa-IR')}\nجمع بستانکار: ${Number(data.creditTotal).toLocaleString('fa-IR')}\nاختلاف: ${Number(data.difference ?? (data.debitTotal-data.creditTotal)).toLocaleString('fa-IR')}`
+            : '';
+        const missing = data && data.missingAccounts ? `\nحساب‌های تعریف‌نشده: ${data.missingAccounts.join('، ')}` : '';
+        result.textContent = message + totals + missing;
     }
-    document.getElementById('validate').addEventListener('click', async () => {
+    async function submit(endpoint) {
+        const entryDate = document.getElementById('entryDate').value;
+        if (!entryDate) { show('تاریخ سند را وارد کنید.', false); return; }
         const lines = [...body.querySelectorAll('tr')].map(tr => ({
             accountName: tr.querySelector('.account').value.trim(),
             debit: Number(tr.querySelector('.debit').value || 0),
             credit: Number(tr.querySelector('.credit').value || 0)
         }));
-        const entryDate = document.getElementById('entryDate').value;
-        if (!entryDate) { show('ØªØ§Ø±ÛŒØ® Ø³Ù†Ø¯ Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†ÛŒØ¯.', false); return; }
         try {
-            const response = await fetch('/api/accounting/validate-entry', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    entryDate: `${entryDate}T00:00:00`,
-                    description: document.getElementById('description').value,
-                    lines
-                })
+                body: JSON.stringify({ entryDate: `${entryDate}T00:00:00`, description: document.getElementById('description').value, lines })
             });
             const data = await response.json();
-            show(data.message || 'Ù¾Ø§Ø³Ø®ÛŒ Ø§Ø² Ø³Ø±ÙˆØ± Ø¯Ø±ÛŒØ§ÙØª Ù†Ø´Ø¯.', response.ok && data.isValid, data);
+            const message = endpoint.endsWith('entries') && response.ok
+                ? `سند با موفقیت ذخیره شد. شماره سند: ${data.documentNumber}`
+                : (data.message || data.detail || 'پاسخ نامعتبر از سرور دریافت شد.');
+            show(message, response.ok && (endpoint.endsWith('entries') || data.isValid), data);
         } catch {
-            show('Ø§Ø±ØªØ¨Ø§Ø· Ø¨Ø§ Ø³Ø±ÙˆØ± Ø¨Ø±Ù‚Ø±Ø§Ø± Ù†Ø´Ø¯. Ø§Ø¨ØªØ¯Ø§ Ø¨Ø±Ù†Ø§Ù…Ù‡ Ø±Ø§ Ø§Ø¬Ø±Ø§ Ú©Ù†ÛŒØ¯.', false);
+            show('ارتباط با سرور برقرار نشد. ابتدا برنامه و پایگاه داده را بررسی کنید.', false);
         }
-    });
+    }
+    document.getElementById('validate').addEventListener('click', () => submit('/api/accounting/validate-entry'));
+    document.getElementById('save').addEventListener('click', () => submit('/api/accounting/entries'));
 })();
 </script>
