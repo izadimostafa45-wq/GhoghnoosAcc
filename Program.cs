@@ -46,10 +46,10 @@ app.MapPost("/api/accounting/validate-entry",
     (JournalEntryValidationRequest request, JournalEntryValidator validator) =>
     {
         var result = validator.Validate(request);
-        return result.IsValid ? Results.Ok(result) : Results.BadRequest(result);
+        return result.IsValid ? (IResult)Results.Ok(result) : Results.BadRequest(result);
     });
 
-app.MapGet("/api/accounting/accounts", async (IServiceProvider services) =>
+app.MapGet("/api/accounting/accounts", async Task<IResult> (IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -62,7 +62,7 @@ app.MapGet("/api/accounting/accounts", async (IServiceProvider services) =>
     return Results.Ok(accounts);
 });
 
-app.MapPost("/api/accounting/accounts", async (CreateAccountRequest request, IServiceProvider services) =>
+app.MapPost("/api/accounting/accounts", async Task<IResult> (CreateAccountRequest request, IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -88,7 +88,7 @@ app.MapPost("/api/accounting/accounts", async (CreateAccountRequest request, ISe
         new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
 });
 
-app.MapGet("/api/accounting/entries", async (IServiceProvider services) =>
+app.MapGet("/api/accounting/entries", async Task<IResult> (IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -165,7 +165,7 @@ app.MapPost("/api/accounting/entries", async (
     });
 });
 
-app.MapGet("/api/accounting/entries/{id:int}", async (int id, IServiceProvider services) =>
+app.MapGet("/api/accounting/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
