@@ -15,6 +15,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../GhoghnoosAcc.csproj" />
+    <ProjectReference Include="../../GhoghnoosAcc.csproj" />
   </ItemGroup>
 </Project>
