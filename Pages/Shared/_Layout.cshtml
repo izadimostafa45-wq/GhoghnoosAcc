@@ -1,5 +1,5 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,43 +10,51 @@
     <link rel="stylesheet" href="~/GhoghnoosAcc.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">GhoghnoosAcc</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
-                        </li>
-                    </ul>
-                </div>
+    <div class="app-shell">
+        <aside class="app-sidebar" aria-label="منوی اصلی">
+            <a class="brand" asp-area="" asp-page="/Index">
+                <span class="brand-mark" aria-hidden="true">ق</span>
+                <span class="brand-copy"><strong>ققنوس</strong><small>سیستم حسابداری</small></span>
+            </a>
+            <div class="sidebar-caption">منوی اصلی</div>
+            <nav class="side-nav">
+                <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")" asp-area="" asp-page="/Index">
+                    <span class="nav-icon">▦</span><span>داشبورد</span>
+                </a>
+                <details class="nav-group" open>
+                    <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
+                    <div class="sub-nav">
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">مدیریت حساب‌ها</a>
+                    </div>
+                </details>
+                <a class="side-link" asp-area="" asp-page="/Accounting/Index">
+                    <span class="nav-icon">▧</span><span>ثبت سند حسابداری</span>
+                </a>
+                <a class="side-link" href="/Accounting/Index#entries" title="بخش اسناد در حال توسعه است">
+                    <span class="nav-icon">≡</span><span>اسناد حسابداری</span>
+                </a>
+            </nav>
+            <div class="sidebar-bottom">
+                <span class="status-dot"></span><span>محیط محلی حسابداری</span>
             </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - GhoghnoosAcc - <a asp-area="" asp-page="/Privacy">Privacy</a>
+        </aside>
+        <div class="app-main">
+            <header class="topbar">
+                <div>
+                    <span class="topbar-eyebrow">سامانه مالی ققنوس</span>
+                    <strong>@ViewData["Title"]</strong>
+                </div>
+                <div class="topbar-badge"><span class="status-dot"></span> فضای کاری</div>
+            </header>
+            <main role="main" class="page-content">
+                @RenderBody()
+            </main>
+            <footer class="app-footer">© 2026 ققنوس · سیستم حسابداری</footer>
         </div>
-    </footer>
-
+    </div>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
