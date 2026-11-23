@@ -1,10 +1,112 @@
-﻿@page
+@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "داشبورد مدیریتی";
 }
+<div class="dashboard" dir="rtl">
+    <section class="welcome-panel">
+        <div>
+            <span class="section-kicker">نمای کلی کسب‌وکار</span>
+            <h1>خوش آمدید 👋</h1>
+            <p>وضعیت حساب‌ها و اسناد حسابداری شما در یک نگاه.</p>
+        </div>
+        <div class="welcome-art" aria-hidden="true"><span>ق</span><i></i><b></b></div>
+    </section>
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <div class="section-heading">
+        <div><h2>خلاصه وضعیت مالی</h2><p>اطلاعات به‌صورت مستقیم از پایگاه داده بارگذاری می‌شود.</p></div>
+        <span id="dashboardUpdated" class="refresh-note">در حال دریافت اطلاعات…</span>
+    </div>
+
+    <section class="stats-grid" aria-label="آمار حسابداری">
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon blue">▤</span><span class="stat-label">حساب‌های تعریف‌شده</span></div>
+            <strong id="accountCount" class="stat-value">—</strong><span class="stat-foot">حساب‌های فعال و غیرفعال</span>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon violet">▧</span><span class="stat-label">کل اسناد</span></div>
+            <strong id="entryCount" class="stat-value">—</strong><span class="stat-foot">اسناد ثبت‌شده در سامانه</span>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon cyan">↙</span><span class="stat-label">جمع بدهکار</span></div>
+            <strong id="debitTotal" class="stat-value money">—</strong><span class="stat-foot">بر اساس اسناد ذخیره‌شده</span>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon teal">↗</span><span class="stat-label">جمع بستانکار</span></div>
+            <strong id="creditTotal" class="stat-value money">—</strong><span class="stat-foot">بر اساس اسناد ذخیره‌شده</span>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon amber">⇄</span><span class="stat-label">اختلاف بدهکار و بستانکار</span></div>
+            <strong id="balanceDifference" class="stat-value money">—</strong><span class="stat-foot">برای اسناد فهرست‌شده</span>
+        </article>
+        <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon rose">◷</span><span class="stat-label">اسناد پیش‌نویس</span></div>
+            <strong id="draftCount" class="stat-value">—</strong><span class="stat-foot">اسناد ثبت‌شده و ارسال‌نشده</span>
+        </article>
+    </section>
+
+    <section class="dashboard-lower">
+        <div class="panel quick-panel">
+            <div class="panel-heading"><div><h2>دسترسی سریع</h2><p>کارهای پرکاربرد را سریع شروع کنید.</p></div><span class="panel-heading-icon">✦</span></div>
+            <a class="quick-link" asp-area="" asp-page="/Accounting/Index">
+                <span class="quick-icon">＋</span><span class="quick-copy"><strong>ثبت سند حسابداری</strong><small>ثبت، بررسی تراز و ذخیره سند جدید</small></span><span class="quick-arrow">←</span>
+            </a>
+            <a class="quick-link" asp-area="" asp-page="/Accounting/Accounts">
+                <span class="quick-icon secondary">▤</span><span class="quick-copy"><strong>مدیریت حساب‌ها</strong><small>تعریف حساب و مشاهده فهرست حساب‌ها</small></span><span class="quick-arrow">←</span>
+            </a>
+        </div>
+        <div class="panel overview-panel">
+            <div class="panel-heading"><div><h2>وضعیت سامانه</h2><p>وضعیت اتصال و داده‌های مالی</p></div><span class="panel-heading-icon">⌁</span></div>
+            <div class="system-status"><span id="dbStatusDot" class="status-indicator"></span><div><strong id="dbStatusTitle">در حال بررسی اتصال</strong><small id="dbStatusText">وضعیت پایگاه داده در حال بررسی است.</small></div></div>
+            <div class="overview-divider"></div>
+            <div class="overview-row"><span>حساب‌های فعال</span><strong id="activeAccountCount">—</strong></div>
+            <div class="overview-row"><span>اسناد متوازن در فهرست</span><strong id="balancedCount">—</strong></div>
+            <p id="dashboardMessage" class="dashboard-message" role="status">در حال بارگذاری اطلاعات…</p>
+        </div>
+    </section>
 </div>
+
+<script>
+(() => {
+    const $ = id => document.getElementById(id);
+    const number = value => Number(value || 0).toLocaleString('fa-IR', { maximumFractionDigits: 2 });
+    const money = value => number(value) + ' ریال';
+    async function loadDashboard() {
+        try {
+            const responses = await Promise.all([
+                fetch('/api/accounting/accounts'),
+                fetch('/api/accounting/entries'),
+                fetch('/api/accounting/status')
+            ]);
+            const [accountsResponse, entriesResponse, statusResponse] = responses;
+            if (!accountsResponse.ok || !entriesResponse.ok || !statusResponse.ok) throw new Error('دریافت اطلاعات از سرور کامل نشد.');
+            const [accounts, entries, status] = await Promise.all(responses.map(r => r.json()));
+            const debit = entries.reduce((sum, entry) => sum + Number(entry.debitTotal || 0), 0);
+            const credit = entries.reduce((sum, entry) => sum + Number(entry.creditTotal || 0), 0);
+            const drafts = entries.filter(entry => !entry.isPosted).length;
+            const balanced = entries.filter(entry => Math.abs(Number(entry.debitTotal || 0) - Number(entry.creditTotal || 0)) < 0.005).length;
+            $('accountCount').textContent = number(accounts.length);
+            $('entryCount').textContent = number(entries.length);
+            $('debitTotal').textContent = money(debit);
+            $('creditTotal').textContent = money(credit);
+            $('balanceDifference').textContent = money(debit - credit);
+            $('draftCount').textContent = number(drafts);
+            $('activeAccountCount').textContent = number(accounts.filter(a => a.isActive).length);
+            $('balancedCount').textContent = number(balanced);
+            $('dashboardUpdated').textContent = 'به‌روزرسانی شد';
+            $('dbStatusDot').classList.add(status.databaseConfigured ? 'online' : 'offline');
+            $('dbStatusTitle').textContent = status.databaseConfigured ? 'پایگاه داده پیکربندی شده' : 'اتصال پایگاه داده تنظیم نشده';
+            $('dbStatusText').textContent = status.persistence === 'PostgreSQL' ? 'PostgreSQL آماده پاسخ‌گویی است.' : 'تنظیم اتصال PostgreSQL بررسی شود.';
+            $('dashboardMessage').textContent = entries.length >= 200 ? 'جمع اسناد بر اساس حداکثر ۲۰۰ سند اخیر محاسبه شده است.' : 'آمار بر اساس اطلاعات فعلی پایگاه داده محاسبه شده است.';
+        } catch (error) {
+            $('dashboardUpdated').textContent = 'بارگذاری ناموفق';
+            $('dbStatusDot').classList.add('offline');
+            $('dbStatusTitle').textContent = 'دریافت اطلاعات ناموفق بود';
+            $('dbStatusText').textContent = 'برنامه و اتصال پایگاه داده را بررسی کنید.';
+            $('dashboardMessage').textContent = error.message || 'امکان دریافت اطلاعات وجود ندارد.';
+            for (const id of ['accountCount','entryCount','debitTotal','creditTotal','balanceDifference','draftCount','activeAccountCount','balancedCount']) $(id).textContent = '—';
+        }
+    }
+    loadDashboard();
+})();
+</script>
