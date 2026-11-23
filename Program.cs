@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JournalEntryValidator>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -16,12 +18,9 @@ builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-if (!string.IsNullOrWhiteSpace(connectionString))
-{
-    await using var scope = app.Services.CreateAsyncScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.EnsureCreatedAsync();
-}
+// Database schema changes are managed exclusively through reviewed EF Core migrations.
+ // Do not call EnsureCreatedAsync here: it bypasses migration history and cannot safely
+ // evolve an existing PostgreSQL database when Identity and tenant tables are introduced.
 
 if (!app.Environment.IsDevelopment())
 {
