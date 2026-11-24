@@ -41,7 +41,17 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Accounting data must stay inaccessible until the authenticated user has a
+    // valid server-issued tenant claim. Membership validation and claim issuance
+    // are implemented as a separate provisioning step.
+    options.AddPolicy("TenantRequired", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context =>
+            Guid.TryParse(context.User.FindFirst(TenantContext.TenantIdClaimType)?.Value, out var tenantId)
+            && tenantId != Guid.Empty));
+});
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
@@ -115,7 +125,7 @@ app.MapPost("/api/accounting/validate-entry",
         return result.IsValid ? (IResult)Results.Ok(result) : Results.BadRequest(result);
     });
 
-var accountingApi = app.MapGroup("/api/accounting").RequireAuthorization();
+var accountingApi = app.MapGroup("/api/accounting").RequireAuthorization("TenantRequired");
 
 accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services) =>
 {
