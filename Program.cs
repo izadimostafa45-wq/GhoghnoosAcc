@@ -2,6 +2,7 @@ using GhoghnoosAcc.Data;
 using GhoghnoosAcc.Models;
 using GhoghnoosAcc.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JournalEntryValidator>();
@@ -14,7 +15,41 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 }
 
-builder.Services.AddRazorPages();
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
+builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddIdentityCookies();
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddRazorPages(options =>
+{
+    options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AllowAnonymousToPage("/Account/Login");
+    options.Conventions.AllowAnonymousToPage("/Error");
+});
 
 var app = builder.Build();
 
@@ -30,6 +65,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
@@ -48,7 +84,9 @@ app.MapPost("/api/accounting/validate-entry",
         return result.IsValid ? (IResult)Results.Ok(result) : Results.BadRequest(result);
     });
 
-app.MapGet("/api/accounting/accounts", async Task<IResult> (IServiceProvider services) =>
+var accountingApi = app.MapGroup("/api/accounting").RequireAuthorization();
+
+accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -61,7 +99,7 @@ app.MapGet("/api/accounting/accounts", async Task<IResult> (IServiceProvider ser
     return Results.Ok(accounts);
 });
 
-app.MapPost("/api/accounting/accounts", async Task<IResult> (CreateAccountRequest request, IServiceProvider services) =>
+accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest request, IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -87,7 +125,7 @@ app.MapPost("/api/accounting/accounts", async Task<IResult> (CreateAccountReques
         new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
 });
 
-app.MapGet("/api/accounting/entries", async Task<IResult> (IServiceProvider services) =>
+accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
@@ -107,7 +145,7 @@ app.MapGet("/api/accounting/entries", async Task<IResult> (IServiceProvider serv
     return Results.Ok(entries);
 });
 
-app.MapPost("/api/accounting/entries", async Task<IResult> (
+accountingApi.MapPost("/entries", async Task<IResult> (
     JournalEntryValidationRequest request,
     JournalEntryValidator validator,
     IServiceProvider services) =>
@@ -166,7 +204,7 @@ app.MapPost("/api/accounting/entries", async Task<IResult> (
     });
 });
 
-app.MapGet("/api/accounting/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services) =>
+accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services) =>
 {
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);

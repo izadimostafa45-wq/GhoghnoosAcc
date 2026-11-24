@@ -1,0 +1,17 @@
+@page
+@model GhoghnoosAcc.Pages.Account.LogoutModel
+@{
+    ViewData["Title"] = "خروج از سامانه";
+}
+<div class="container py-5" dir="rtl" style="max-width:520px">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <h1 class="h4">خروج از سامانه</h1>
+            <p class="text-muted">برای پایان امن نشست کاربری، دکمه زیر را انتخاب کنید.</p>
+            <form method="post">
+                <button type="submit" class="btn btn-outline-danger">خروج امن</button>
+                <a asp-page="/Index" class="btn btn-light">بازگشت</a>
+            </form>
+        </div>
+    </div>
+</div>
