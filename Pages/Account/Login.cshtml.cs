@@ -8,7 +8,7 @@ using GhoghnoosAcc.Models;
 namespace GhoghnoosAcc.Pages.Account;
 
 [AllowAnonymous]
-public sealed class LoginModel(SignInManager<ApplicationUser> signInManager) : PageModel
+public sealed class LoginModel(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) : PageModel
 {
     [BindProperty]
     public LoginInput Input { get; set; } = new();
@@ -38,8 +38,10 @@ public sealed class LoginModel(SignInManager<ApplicationUser> signInManager) : P
         if (!ModelState.IsValid)
             return Page();
 
-        var result = await signInManager.PasswordSignInAsync(
-            Input.Email.Trim(), Input.Password, Input.RememberMe, lockoutOnFailure: true);
+        var user = await userManager.FindByEmailAsync(Input.Email.Trim());
+        var result = user is null
+            ? Microsoft.AspNetCore.Identity.SignInResult.Failed
+            : await signInManager.PasswordSignInAsync(user.UserName!, Input.Password, Input.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
             return LocalRedirect(ReturnUrl);
