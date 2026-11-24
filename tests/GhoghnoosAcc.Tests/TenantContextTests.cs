@@ -35,9 +35,9 @@ public sealed class TenantContextTests
     [InlineData("00000000-0000-0000-0000-000000000000")]
     public void TenantId_IsNull_WhenClaimIsMissingOrInvalid(string? claimValue)
     {
-        var claims = claimValue is null
+        IEnumerable<Claim> claims = claimValue is null
             ? Array.Empty<Claim>()
-            : [new Claim(TenantContext.TenantIdClaimType, claimValue)];
+            : new[] { new Claim(TenantContext.TenantIdClaimType, claimValue) };
         var principal = AuthenticatedPrincipal(claims);
 
         var tenantContext = CreateContext(principal);
