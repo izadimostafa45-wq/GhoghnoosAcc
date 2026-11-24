@@ -41,7 +41,7 @@
                     <span class="topbar-eyebrow">سامانه مالی ققنوس</span>
                     <strong>@ViewData["Title"]</strong>
                 </div>
-                <div class="topbar-badge"><span class="status-dot"></span> فضای کاری</div>
+                <div class="d-flex align-items-center gap-3"><div class="topbar-badge"><span class="status-dot"></span> فضای کاری</div>@if (User.Identity?.IsAuthenticated == true) { <a class="btn btn-sm btn-outline-secondary" asp-page="/Account/Logout">خروج</a> }</div>
             </header>
             <main role="main" class="page-content">
                 @RenderBody()
