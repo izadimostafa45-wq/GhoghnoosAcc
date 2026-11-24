@@ -18,8 +18,6 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
-builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
-    .AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Events.OnRedirectToLogin = context =>
@@ -52,6 +50,39 @@ builder.Services.AddRazorPages(options =>
 });
 
 var app = builder.Build();
+
+// Optional one-time bootstrap for the first local administrator.
+// Supply BootstrapAdmin:Email and BootstrapAdmin:Password through user-secrets or environment
+// variables. Never commit credentials. Bootstrap runs only when PostgreSQL is configured
+// and the Identity user table is empty; it never resets or overwrites an existing account.
+var bootstrapEmail = builder.Configuration["BootstrapAdmin:Email"]?.Trim();
+var bootstrapPassword = builder.Configuration["BootstrapAdmin:Password"];
+if (!string.IsNullOrWhiteSpace(connectionString)
+    && !string.IsNullOrWhiteSpace(bootstrapEmail)
+    && !string.IsNullOrWhiteSpace(bootstrapPassword))
+{
+    using var bootstrapScope = app.Services.CreateScope();
+    var bootstrapUserManager = bootstrapScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    if (!await bootstrapUserManager.Users.AnyAsync())
+    {
+        var bootstrapUser = new ApplicationUser
+        {
+            UserName = bootstrapEmail,
+            Email = bootstrapEmail,
+            EmailConfirmed = true
+        };
+        var createResult = await bootstrapUserManager.CreateAsync(bootstrapUser, bootstrapPassword);
+        if (!createResult.Succeeded)
+        {
+            var errorCodes = string.Join(", ", createResult.Errors.Select(error => error.Code));
+            throw new InvalidOperationException(
+                $"Initial administrator could not be created. Identity validation errors: {errorCodes}");
+        }
+
+        app.Logger.LogWarning(
+            "Initial administrator account was created from BootstrapAdmin configuration. Remove the bootstrap password setting after successful sign-in.");
+    }
+}
 
 // Database schema changes are managed exclusively through reviewed EF Core migrations.
  // Do not call EnsureCreatedAsync here: it bypasses migration history and cannot safely
