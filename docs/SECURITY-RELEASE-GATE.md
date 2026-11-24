@@ -5,7 +5,8 @@ Do not deploy GhoghnoosAcc as a multi-customer public SaaS until all items below
 - [ ] ASP.NET Core Identity is configured; no plaintext passwords.
 - [ ] Login, logout, lockout, recovery and secure cookie settings are tested.
 - [ ] Anonymous requests to all accounting APIs are denied.
-- [ ] Tenant is derived from authenticated membership on the server.
+- [ ] Accounting API policy fails closed unless the authenticated principal has a valid tenant claim (implemented; API remains unavailable until trusted claim issuance is added).
+- [ ] Tenant claim is issued only after validating an active server-side membership.
 - [ ] All business-owned rows are tenant-scoped, including accounts, parties, entries and entry lines.
 - [ ] Cross-tenant foreign-key references are rejected.
 - [ ] Account code and document number uniqueness is tenant-scoped.
@@ -21,4 +22,4 @@ Do not deploy GhoghnoosAcc as a multi-customer public SaaS until all items below
 - [ ] Backup restoration has been tested.
 - [ ] CI build and automated tests pass.
 
-Current known blockers: accounting endpoints are not authenticated and data is not tenant-isolated. The current app must remain local/private until these blockers are fixed.
+Current known blockers: accounting API access now requires authentication plus a valid tenant claim, but the application does not yet issue that claim after validating membership. Therefore accounting API calls are intentionally denied for current users until tenant provisioning is implemented. Business tables also lack tenant ownership columns and tenant-scoped queries, cross-tenant reference checks and integration tests are still required. Keep the app local/private; this fail-closed gate is not a substitute for complete tenant isolation.
