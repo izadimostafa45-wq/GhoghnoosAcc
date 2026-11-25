@@ -811,6 +811,9 @@ accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, In
         if (invoice.TaxTotal > 0) journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = taxAccount!.Id, PartyId = invoice.PartyId, Debit = invoice.TaxTotal, Description = "مالیات خرید" });
         journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = counterparty.Id, PartyId = invoice.PartyId, Credit = invoice.Total, Description = "مانده فاکتور" });
     }
+    invoice.CounterpartyAccountId = counterparty.Id;
+    invoice.OperatingAccountId = operating.Id;
+    invoice.TaxAccountId = invoice.TaxTotal > 0 ? taxAccount!.Id : request.TaxAccountId;
     invoice.Status = InvoiceStatuses.Posted;
     invoice.JournalEntry = journal;
     db.JournalEntries.Add(journal);
@@ -858,8 +861,8 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
         return Results.BadRequest(new { message = "مبلغ عملیات از مانده فاکتور بیشتر است.", invoiceTotal = invoice.Total, alreadyPaid, remaining });
     var counterpartType = invoice.Kind == InvoiceKinds.Sales ? "Asset" : "Liability";
     var counterpart = await db.Accounts.ForTenant(tenantId)
-        .FirstOrDefaultAsync(a => a.Id == request.CounterpartyAccountId && a.IsActive && a.Type == counterpartType);
-    if (counterpart is null)
+        .FirstOrDefaultAsync(a => a.Id == invoice.CounterpartyAccountId && a.IsActive && a.Type == counterpartType);
+    if (counterpart is null || request.CounterpartyAccountId != invoice.CounterpartyAccountId)
         return Results.BadRequest(new { message = "حساب دریافتنی/پرداختنی انتخاب‌شده معتبر نیست یا با نوع فاکتور سازگار نیست." });
     var journalNumber = "PAY-" + number;
     if (await db.JournalEntries.ForTenant(tenantId).AnyAsync(x => x.DocumentNumber == journalNumber))
