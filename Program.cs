@@ -850,7 +850,10 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
         : accounts.Where(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران"))).ToList();
     var counterpart = counterpartCandidates.Count == 1 ? counterpartCandidates[0] : null;
     if (counterpart is null) return Results.Conflict(new { message = "حساب دریافتنی/پرداختنی فاکتور مشخص نیست؛ ابتدا عنوان حساب را تنظیم کنید." });
-    var journal = new JournalEntry { TenantId = tenantId, DocumentNumber = "PAY-" + number,
+    var journalNumber = "PAY-" + number;
+    if (await db.JournalEntries.ForTenant(tenantId).AnyAsync(x => x.DocumentNumber == journalNumber))
+        return Results.Conflict(new { message = "شماره سند حسابداری مرتبط تکراری است؛ شماره رسید/پرداخت را تغییر دهید." });
+    var journal = new JournalEntry { TenantId = tenantId, DocumentNumber = journalNumber,
         DocumentDate = DateTime.SpecifyKind(request.PaymentDate.Date, DateTimeKind.Utc),
         Description = (request.Kind == PaymentKinds.Receipt ? "دریافت " : "پرداخت ") + number,
         IsPosted = true };
