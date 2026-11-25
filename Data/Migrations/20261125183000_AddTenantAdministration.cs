@@ -39,8 +39,18 @@ public sealed class AddTenantAdministration : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_TenantMemberships", x => x.Id);
-                table.ForeignKey("FK_TenantMemberships_AspNetUsers_UserId", x => x.UserId, "AspNetUsers", "Id", onDelete: ReferentialAction.Cascade);
-                table.ForeignKey("FK_TenantMemberships_Tenants_TenantId", x => x.TenantId, "Tenants", "Id", onDelete: ReferentialAction.Cascade);
+                table.ForeignKey(
+                    name: "FK_TenantMemberships_AspNetUsers_UserId",
+                    column: x => x.UserId,
+                    principalTable: "AspNetUsers",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Cascade);
+                table.ForeignKey(
+                    name: "FK_TenantMemberships_Tenants_TenantId",
+                    column: x => x.TenantId,
+                    principalTable: "Tenants",
+                    principalColumn: "Id",
+                    onDelete: ReferentialAction.Cascade);
             });
 
         migrationBuilder.CreateIndex(name: "IX_Tenants_Name", table: "Tenants", column: "Name");
