@@ -31,9 +31,13 @@ public sealed class SelectTenantModel(
     [BindProperty]
     public string ReturnUrl { get; set; } = "/";
 
-    public async Task<IActionResult> OnGetAsync(string? returnUrl = null)
+    [BindProperty]
+    public bool RememberMe { get; set; }
+
+    public async Task<IActionResult> OnGetAsync(string? returnUrl = null, bool rememberMe = false)
     {
         ReturnUrl = Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
+        RememberMe = rememberMe;
         await LoadTenantsAsync();
         if (Tenants.Count == 0)
         {
@@ -68,10 +72,10 @@ public sealed class SelectTenantModel(
             return Page();
         }
 
-        await signInManager.SignInWithClaimsAsync(user, false, new[]
+        await signInManager.SignInWithClaimsAsync(user, RememberMe, new[]
         {
             new Claim(TenantContext.TenantIdClaimType, membership.TenantId.ToString("D")),
-            new Claim("ghoghnoos:tenant_role", membership.Role)
+            new Claim(TenantRoleAuthorization.RoleClaimType, membership.Role)
         });
 
         return LocalRedirect(ReturnUrl);
