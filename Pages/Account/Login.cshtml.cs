@@ -59,7 +59,8 @@ public sealed class LoginModel(
                 .Where(m => m.UserId == user.Id
                     && m.IsActive
                     && m.Tenant != null
-                    && m.Tenant.Status == TenantStatuses.Active)
+                    && m.Tenant.Status == TenantStatuses.Active
+                    && TenantRoleAuthorization.ReadRoles.Contains(m.Role))
                 .Select(m => new { m.TenantId, m.Role })
                 .Take(2)
                 .ToListAsync();
