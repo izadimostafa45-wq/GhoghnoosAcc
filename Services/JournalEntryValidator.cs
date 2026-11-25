@@ -63,7 +63,8 @@ public sealed record JournalEntryValidationRequest(
 public sealed record JournalEntryValidationLine(
     string? AccountName,
     decimal Debit,
-    decimal Credit);
+    decimal Credit,
+    string? PartyName = null);
 
 public sealed record JournalEntryValidationResult(
     bool IsValid,
