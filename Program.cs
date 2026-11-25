@@ -143,8 +143,7 @@ accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
     var db = services.GetRequiredService<AppDbContext>();
-    var accounts = await db.Accounts.AsNoTracking()
-        .Where(x => x.TenantId == tenantId)
+    var accounts = await db.Accounts.AsNoTracking().ForTenant(tenantId)
         .OrderBy(x => x.Code)
         .Select(x => new { x.Id, x.Code, x.Title, x.Type, x.IsActive })
         .ToListAsync();
@@ -163,7 +162,7 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
     var db = services.GetRequiredService<AppDbContext>();
     var code = request.Code.Trim();
     var title = request.Title.Trim();
-    if (await db.Accounts.AnyAsync(x => x.TenantId == tenantId && x.Code == code))
+    if (await db.Accounts.ForTenant(tenantId).AnyAsync(x => x.Code == code))
         return Results.Conflict(new { message = "An account with this code already exists." });
 
     var account = new Account
@@ -188,8 +187,7 @@ accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services,
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
     var db = services.GetRequiredService<AppDbContext>();
-    var entries = await db.JournalEntries.AsNoTracking()
-        .Where(x => x.TenantId == tenantId)
+    var entries = await db.JournalEntries.AsNoTracking().ForTenant(tenantId)
         .OrderByDescending(x => x.DocumentDate)
         .ThenByDescending(x => x.Id)
         .Select(x => new
@@ -221,7 +219,8 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     var db = services.GetRequiredService<AppDbContext>();
     var names = request.Lines!.Select(x => x!.AccountName!.Trim()).Distinct().ToList();
     var accounts = await db.Accounts
-        .Where(x => x.TenantId == tenantId && x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
+        .ForTenant(tenantId)
+        .Where(x => x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
         .ToListAsync();
 
     var accountMap = accounts
@@ -276,9 +275,10 @@ accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceP
 
     var db = services.GetRequiredService<AppDbContext>();
     var entry = await db.JournalEntries.AsNoTracking()
+        .ForTenant(tenantId)
         .Include(x => x.Lines)
         .ThenInclude(x => x.Account)
-        .Where(x => x.Id == id && x.TenantId == tenantId)
+        .Where(x => x.Id == id)
         .Select(x => new
         {
             x.Id, x.DocumentNumber, x.DocumentDate, x.Description, x.IsPosted,
