@@ -779,6 +779,60 @@ accountingApi.MapPost("/entries/{id:int}/post", async Task<IResult> (
 }).RequireAuthorization("TenantWrite");
 
 
+accountingApi.MapGet("/reports/invoice-balances", async Task<IResult> (
+    DateTime? fromDate, DateTime? toDate, string? kind,
+    IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    if (fromDate.HasValue && toDate.HasValue && fromDate.Value.Date > toDate.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد." });
+    if (!string.IsNullOrWhiteSpace(kind) && kind != InvoiceKinds.Sales && kind != InvoiceKinds.Purchase)
+        return Results.BadRequest(new { message = "نوع گزارش معتبر نیست." });
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var query = db.Invoices.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.Status == InvoiceStatuses.Posted);
+    if (!string.IsNullOrWhiteSpace(kind)) query = query.Where(x => x.Kind == kind);
+    if (fromDate.HasValue)
+    {
+        var start = DateTime.SpecifyKind(fromDate.Value.Date, DateTimeKind.Utc);
+        query = query.Where(x => x.InvoiceDate >= start);
+    }
+    if (toDate.HasValue)
+    {
+        var endExclusive = DateTime.SpecifyKind(toDate.Value.Date.AddDays(1), DateTimeKind.Utc);
+        query = query.Where(x => x.InvoiceDate < endExclusive);
+    }
+
+    var invoices = await query
+        .OrderBy(x => x.InvoiceDate).ThenBy(x => x.Number)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.InvoiceDate, x.PartyId, PartyName = x.Party.Name, x.Total, x.JournalEntryId })
+        .ToListAsync();
+    var ids = invoices.Select(x => x.Id).ToList();
+    var paid = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.InvoiceId.HasValue && ids.Contains(x.InvoiceId.Value))
+        .GroupBy(x => x.InvoiceId!.Value)
+        .Select(g => new { InvoiceId = g.Key, AmountPaid = g.Sum(x => x.Amount) })
+        .ToDictionaryAsync(x => x.InvoiceId, x => x.AmountPaid);
+
+    var rows = invoices.Select(x =>
+    {
+        var amountPaid = paid.GetValueOrDefault(x.Id, 0m);
+        return new { x.Id, x.Number, x.Kind, x.InvoiceDate, x.PartyId, x.PartyName, x.Total,
+            AmountPaid = amountPaid, Remaining = Math.Max(0m, x.Total - amountPaid), x.JournalEntryId };
+    }).Where(x => x.Remaining > 0m).ToList();
+
+    return Results.Ok(new
+    {
+        Count = rows.Count,
+        TotalInvoiced = rows.Sum(x => x.Total),
+        TotalPaid = rows.Sum(x => x.AmountPaid),
+        TotalRemaining = rows.Sum(x => x.Remaining),
+        Invoices = rows
+    });
+});
+
 accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
