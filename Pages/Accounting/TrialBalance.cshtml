@@ -1,0 +1,69 @@
+@page
+@{
+    ViewData["Title"] = "تراز آزمایشی";
+}
+<div class="report-page" dir="rtl">
+    <section class="report-hero"><div><span>گزارش‌های مالی</span><h1>تراز آزمایشی</h1><p>مانده بدهکار و بستانکار حساب‌ها در بازه انتخابی، بر اساس اسناد ذخیره‌شده.</p></div><a href="/Accounting/Entries">مشاهده دفتر اسناد ←</a></section>
+    <section class="report-panel">
+        <form id="reportFilters" class="filters">
+            <label>از تاریخ<input id="fromDate" type="date" /></label>
+            <label>تا تاریخ<input id="toDate" type="date" /></label>
+            <button type="submit">تهیه گزارش</button>
+            <button type="button" id="exportCsv" class="secondary" disabled>خروجی CSV</button>
+        </form>
+        <div class="totals">
+            <article><span>تعداد حساب‌های دارای گردش</span><strong id="accountCount">—</strong></article>
+            <article><span>جمع بدهکار</span><strong id="debitTotal">—</strong></article>
+            <article><span>جمع بستانکار</span><strong id="creditTotal">—</strong></article>
+            <article><span>اختلاف</span><strong id="difference">—</strong></article>
+        </div>
+        <p id="reportMessage" role="status"></p>
+        <div class="table-scroll"><table><thead><tr><th>کد حساب</th><th>عنوان حساب</th><th>تعداد ردیف</th><th>جمع بدهکار</th><th>جمع بستانکار</th><th>مانده بدهکار</th><th>مانده بستانکار</th></tr></thead><tbody id="reportRows"><tr><td colspan="7">برای تهیه گزارش، تاریخ‌ها را انتخاب کنید یا گزارش را اجرا کنید.</td></tr></tbody></table></div>
+    </section>
+</div>
+<style>
+.report-page{max-width:1400px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.report-hero{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:26px 30px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.report-hero span{font-size:11px;color:#2677c9;font-weight:700}.report-hero h1{font-size:26px;margin:9px 0}.report-hero p{font-size:12px;color:#74859a;line-height:1.9;margin:0}.report-hero a{white-space:nowrap;color:#2465a5;text-decoration:none;font-size:12px}.report-panel{padding:22px;background:#fff;border:1px solid #e2eaf4;border-radius:15px}.filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:20px}.filters label{display:flex;flex-direction:column;gap:7px;font-size:11px;color:#64768b;font-weight:700}.filters input{padding:10px;border:1px solid #d9e3ef;border-radius:9px;font:inherit}.filters button{padding:11px 15px;border:0;border-radius:9px;background:#2677c9;color:#fff;font:inherit;font-size:12px;cursor:pointer}.filters button.secondary{background:#edf5ff;color:#2465a5}.filters button:disabled{opacity:.5;cursor:not-allowed}.totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.totals article{display:flex;flex-direction:column;gap:10px;padding:15px;border:1px solid #e5edf6;border-radius:11px;background:#f8fbff}.totals span{font-size:11px;color:#8292a6}.totals strong{font-size:17px;color:#2a4b6c;overflow-wrap:anywhere}#reportMessage{font-size:11px;color:#71849a;white-space:pre-wrap;line-height:1.8}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:680px}th,td{padding:13px 10px;text-align:right;border-bottom:1px solid #edf1f6;font-size:11px;line-height:1.8}th{background:#f7faff;color:#64768b}td{color:#435970}@media(max-width:700px){.report-hero{align-items:start;flex-direction:column;padding:20px}.report-hero h1{font-size:22px}.report-panel{padding:14px}.totals{grid-template-columns:repeat(2,minmax(0,1fr))}.totals article{padding:11px}.totals strong{font-size:14px}}
+</style>
+<script>
+(() => {
+    const form=document.getElementById('reportFilters'), rows=document.getElementById('reportRows'), message=document.getElementById('reportMessage');
+    let report=null;
+    const number=v=>Number(v||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+    async function load(event){
+        if(event)event.preventDefault();
+        const from=document.getElementById('fromDate').value,to=document.getElementById('toDate').value;
+        if(from&&to&&from>to){message.textContent='تاریخ شروع نباید بعد از تاریخ پایان باشد.';return;}
+        message.textContent='در حال تهیه گزارش…';rows.replaceChildren();
+        const params=new URLSearchParams();if(from)params.set('from',from);if(to)params.set('to',to);
+        try{
+            const response=await fetch('/api/accounting/reports/trial-balance?'+params.toString()),data=await response.json();
+            if(!response.ok)throw new Error(data.detail||data.message||'تهیه گزارش ناموفق بود.');
+            report=data;const accounts=data.accounts||[];
+            document.getElementById('accountCount').textContent=accounts.length.toLocaleString('fa-IR');
+            document.getElementById('debitTotal').textContent=number(data.debitTotal)+' ریال';
+            document.getElementById('creditTotal').textContent=number(data.creditTotal)+' ریال';
+            document.getElementById('difference').textContent=number(data.difference)+' ریال';
+            for(const a of accounts){
+                const debitBalance=Math.max(Number(a.debit)-Number(a.credit),0),creditBalance=Math.max(Number(a.credit)-Number(a.debit),0);
+                const tr=document.createElement('tr');
+                for(const v of [a.code,a.title,number(a.documentLines),number(a.debit),number(a.credit),number(debitBalance),number(creditBalance)]){
+                    const td=document.createElement('td');td.textContent=v;tr.appendChild(td);
+                }rows.appendChild(tr);
+            }
+            if(!accounts.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='در این بازه گردش حسابی پیدا نشد.';tr.appendChild(td);rows.appendChild(tr);}
+            message.textContent='گزارش بر اساس اسناد ذخیره‌شده تهیه شد؛ وضعیت پیش‌نویس یا نهایی بودن اسناد در جمع‌ها تفکیک نشده است.';
+            document.getElementById('exportCsv').disabled=!accounts.length;
+        }catch(error){report=null;document.getElementById('exportCsv').disabled=true;message.textContent=error.message||'ارتباط با سرور برقرار نشد.';}
+    }
+    document.getElementById('exportCsv').addEventListener('click',()=>{
+        if(!report)return;
+        const data=[['کد حساب','عنوان حساب','تعداد ردیف','جمع بدهکار','جمع بستانکار','مانده بدهکار','مانده بستانکار']];
+        for(const a of report.accounts){data.push([a.code,a.title,a.documentLines,a.debit,a.credit,Math.max(a.debit-a.credit,0),Math.max(a.credit-a.debit,0)]);}
+        const csv='\uFEFF'+data.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');
+        const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');
+        link.href=url;link.download='trial-balance.csv';link.click();URL.revokeObjectURL(url);
+    });
+    form.addEventListener('submit',load);
+    load();
+})();
+</script>
