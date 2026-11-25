@@ -5,16 +5,16 @@ Do not deploy GhoghnoosAcc as a multi-customer public SaaS until all items below
 - [ ] ASP.NET Core Identity is configured; no plaintext passwords.
 - [ ] Login, logout, lockout, recovery and secure cookie settings are tested.
 - [ ] Anonymous requests to all accounting APIs are denied.
-- [ ] Accounting API policy fails closed unless the authenticated principal has a valid tenant claim (implemented; API remains unavailable until trusted claim issuance is added).
+- [x] Accounting API policy fails closed unless the authenticated principal has a valid tenant claim.
 - [ ] Tenant claim is issued only after validating an active server-side membership.
-- [ ] All business-owned rows are tenant-scoped, including accounts, parties, entries and entry lines.
-- [ ] Cross-tenant foreign-key references are rejected.
-- [ ] Account code and document number uniqueness is tenant-scoped.
+- [x] Tenant ownership columns and tenant-scoped unique indexes are represented in the model and a forward migration is added.
+- [ ] Migration has been applied and tested against a copy of the current PostgreSQL database; do not apply it to the only copy of production data.
+- [ ] Migration row counts and accounting totals are verified before and after application.
+- [ ] All accounting reads and writes are filtered by the authenticated tenant, including accounts, parties, entries and entry lines.
+- [ ] Cross-tenant foreign-key references are rejected by application validation and database constraints.
 - [ ] Owner, admin, accountant, sales, service and read-only policies are tested.
 - [ ] Staff cannot grant themselves owner/platform privileges.
 - [ ] Create/edit/delete/post/export permissions are enforced by server endpoints.
-- [ ] Database migration tested against a copy of the current database.
-- [ ] Before/after row counts and accounting totals match after migration.
 - [ ] Integration tests prove tenant A cannot read or mutate tenant B data.
 - [ ] Posting sales/service invoices is transactional and idempotent.
 - [ ] Secrets are not committed to source control.
@@ -22,4 +22,8 @@ Do not deploy GhoghnoosAcc as a multi-customer public SaaS until all items below
 - [ ] Backup restoration has been tested.
 - [ ] CI build and automated tests pass.
 
-Current known blockers: accounting API access now requires authentication plus a valid tenant claim, but the application does not yet issue that claim after validating membership. Therefore accounting API calls are intentionally denied for current users until tenant provisioning is implemented. Business tables also lack tenant ownership columns and tenant-scoped queries, cross-tenant reference checks and integration tests are still required. Keep the app local/private; this fail-closed gate is not a substitute for complete tenant isolation.
+## Migration behavior and limitations
+
+The tenant-ownership migration creates the tenant and membership tables if needed, creates one fixed-ID **Legacy Workspace**, and assigns all existing accounting rows to that workspace so existing rows are not left without an owner. It does **not** automatically grant any user membership or owner privileges. The migration is intentionally irreversible because dropping tenant IDs could combine customer data. Review and test it against a backup/copy first.
+
+The /api/accounting group remains fail-closed: no trusted tenant claim is issued by the current login flow, so these endpoints stay unavailable. This branch adds ownership fields and tenant-scoped uniqueness, but it does not yet implement membership provisioning, tenant-scoped endpoint queries, cross-tenant relationship validation, or full integration tests. Do not merge or deploy as multi-tenant SaaS until those blockers are completed.

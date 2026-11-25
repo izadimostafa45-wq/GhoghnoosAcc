@@ -127,21 +127,26 @@ app.MapPost("/api/accounting/validate-entry",
 
 var accountingApi = app.MapGroup("/api/accounting").RequireAuthorization("TenantRequired");
 
-accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services) =>
+accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
     var db = services.GetRequiredService<AppDbContext>();
     var accounts = await db.Accounts.AsNoTracking()
+        .Where(x => x.TenantId == tenantId)
         .OrderBy(x => x.Code)
         .Select(x => new { x.Id, x.Code, x.Title, x.Type, x.IsActive })
         .ToListAsync();
     return Results.Ok(accounts);
 });
 
-accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest request, IServiceProvider services) =>
+accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest request, IServiceProvider services, ITenantContext tenantContext) =>
 {
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
     if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Title))
@@ -150,11 +155,12 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
     var db = services.GetRequiredService<AppDbContext>();
     var code = request.Code.Trim();
     var title = request.Title.Trim();
-    if (await db.Accounts.AnyAsync(x => x.Code == code))
+    if (await db.Accounts.AnyAsync(x => x.TenantId == tenantId && x.Code == code))
         return Results.Conflict(new { message = "An account with this code already exists." });
 
     var account = new Account
     {
+        TenantId = tenantId,
         Code = code,
         Title = title,
         Type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim(),
@@ -166,13 +172,16 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
 });
 
-accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services) =>
+accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
     var db = services.GetRequiredService<AppDbContext>();
     var entries = await db.JournalEntries.AsNoTracking()
+        .Where(x => x.TenantId == tenantId)
         .OrderByDescending(x => x.DocumentDate)
         .ThenByDescending(x => x.Id)
         .Select(x => new
@@ -189,8 +198,11 @@ accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services)
 accountingApi.MapPost("/entries", async Task<IResult> (
     JournalEntryValidationRequest request,
     JournalEntryValidator validator,
-    IServiceProvider services) =>
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
 {
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
@@ -201,7 +213,7 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     var db = services.GetRequiredService<AppDbContext>();
     var names = request.Lines!.Select(x => x!.AccountName!.Trim()).Distinct().ToList();
     var accounts = await db.Accounts
-        .Where(x => x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
+        .Where(x => x.TenantId == tenantId && x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
         .ToListAsync();
 
     var accountMap = accounts
@@ -219,6 +231,7 @@ accountingApi.MapPost("/entries", async Task<IResult> (
 
     var entry = new JournalEntry
     {
+        TenantId = tenantId,
         DocumentNumber = $"JV-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
         // The document date is entered as a calendar date, but Npgsql maps DateTime to timestamptz by default.
         // Mark the submitted date as UTC so it can be stored safely in the existing schema.
@@ -227,6 +240,7 @@ accountingApi.MapPost("/entries", async Task<IResult> (
         IsPosted = false,
         Lines = request.Lines!.Select(line => new JournalEntryLine
         {
+            TenantId = tenantId,
             AccountId = accountMap[line!.AccountName!.Trim()].Id,
             Debit = line.Debit,
             Credit = line.Credit
@@ -245,8 +259,10 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     });
 });
 
-accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services) =>
+accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
 {
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
 
@@ -254,7 +270,7 @@ accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceP
     var entry = await db.JournalEntries.AsNoTracking()
         .Include(x => x.Lines)
         .ThenInclude(x => x.Account)
-        .Where(x => x.Id == id)
+        .Where(x => x.Id == id && x.TenantId == tenantId)
         .Select(x => new
         {
             x.Id, x.DocumentNumber, x.DocumentDate, x.Description, x.IsPosted,

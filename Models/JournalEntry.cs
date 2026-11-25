@@ -1,8 +1,14 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
+
 namespace GhoghnoosAcc.Models;
+
 public class JournalEntry
 {
     public int Id { get; set; }
+
+    public Guid TenantId { get; set; }
+    public Tenant Tenant { get; set; } = null!;
+
     [Required, StringLength(40)] public string DocumentNumber { get; set; } = "";
     public DateTime DocumentDate { get; set; } = DateTime.Today;
     [StringLength(500)] public string? Description { get; set; }

@@ -18,20 +18,43 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<Account>().HasIndex(x => x.Code).IsUnique();
-        modelBuilder.Entity<JournalEntry>().HasIndex(x => x.DocumentNumber).IsUnique();
+        modelBuilder.Entity<Account>().HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+        modelBuilder.Entity<JournalEntry>().HasIndex(x => new { x.TenantId, x.DocumentNumber }).IsUnique();
+
+        modelBuilder.Entity<Account>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Party>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<JournalEntry>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<JournalEntryLine>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+
+        // Composite tenant-aware foreign keys prevent records from linking to entities
+        // owned by another workspace, even if an API validation is accidentally omitted.
+        modelBuilder.Entity<Account>().HasAlternateKey(x => new { x.TenantId, x.Id });
+        modelBuilder.Entity<Party>().HasAlternateKey(x => new { x.TenantId, x.Id });
+        modelBuilder.Entity<JournalEntry>().HasAlternateKey(x => new { x.TenantId, x.Id });
 
         modelBuilder.Entity<Account>().HasOne(x => x.ParentAccount).WithMany()
-            .HasForeignKey(x => x.ParentAccountId).OnDelete(DeleteBehavior.Restrict);
+            .HasForeignKey(x => new { x.TenantId, x.ParentAccountId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<JournalEntryLine>().HasOne(x => x.Account).WithMany()
-            .HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            .HasForeignKey(x => new { x.TenantId, x.AccountId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<JournalEntryLine>().HasOne(x => x.Party).WithMany()
-            .HasForeignKey(x => x.PartyId).OnDelete(DeleteBehavior.SetNull);
+            .HasForeignKey(x => new { x.TenantId, x.PartyId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<JournalEntryLine>().HasOne(x => x.JournalEntry).WithMany(x => x.Lines)
-            .HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(x => new { x.TenantId, x.JournalEntryId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id })
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Tenant>(entity =>
         {
