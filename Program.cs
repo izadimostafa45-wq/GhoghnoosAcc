@@ -596,6 +596,17 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
     if (account is null)
         return Results.NotFound(new { message = "حساب انتخاب‌شده پیدا نشد." });
 
+    var openingBalance = from.HasValue
+        ? await db.JournalEntryLines.AsNoTracking()
+            .ForTenant(tenantId)
+            .Where(line => line.TenantId == tenantId
+                && line.AccountId == account.Id
+                && line.JournalEntry.TenantId == tenantId
+                && line.JournalEntry.IsPosted
+                && line.JournalEntry.DocumentDate < start)
+            .SumAsync(line => (decimal?)(line.Debit - line.Credit)) ?? 0m
+        : 0m;
+
     var lines = await db.JournalEntryLines.AsNoTracking()
         .ForTenant(tenantId)
         .Where(line => line.TenantId == tenantId
@@ -619,7 +630,7 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
         })
         .ToListAsync();
 
-    decimal runningBalance = 0m;
+    decimal runningBalance = openingBalance;
     var ledgerLines = lines.Select(line =>
     {
         runningBalance += line.Debit - line.Credit;
@@ -641,6 +652,7 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
         account,
         from = from?.Date,
         to = to?.Date,
+        openingBalance,
         lines = ledgerLines,
         debitTotal = lines.Sum(x => x.Debit),
         creditTotal = lines.Sum(x => x.Credit),
