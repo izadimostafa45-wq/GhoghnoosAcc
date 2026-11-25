@@ -23,3 +23,5 @@ public sealed record PaymentCreateRequest(
     int? InvoiceId,
     decimal Amount,
     string? Notes);
+
+public sealed record InvoicePostRequest(int CounterpartyAccountId, int OperatingAccountId, int? TaxAccountId);
