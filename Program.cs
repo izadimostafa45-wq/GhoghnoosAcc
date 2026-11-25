@@ -46,6 +46,9 @@ builder.Services.AddAuthorization(options =>
     // Accounting data must stay inaccessible until the authenticated user has a
     // valid server-issued tenant claim. Membership validation and claim issuance
     // are implemented as a separate provisioning step.
+    options.AddPolicy("PlatformAdmin", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim(PlatformAdminAuthorization.ClaimType, "true"));
     options.AddPolicy("TenantRequired", policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(context => TenantRoleAuthorization.HasValidTenantAndRole(context.User)));
