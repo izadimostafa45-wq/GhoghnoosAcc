@@ -320,6 +320,43 @@ app.MapPost("/api/accounting/validate-entry",
         return result.IsValid ? (IResult)Results.Ok(result) : Results.BadRequest(result);
     });
 
+var workspaceApi = app.MapGroup("/api/workspaces").RequireAuthorization();
+
+workspaceApi.MapGet("/", async (
+    ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, AppDbContext db) =>
+{
+    var user = await userManager.GetUserAsync(principal);
+    if (user is null) return Results.Unauthorized();
+    var rows = await db.TenantMemberships.AsNoTracking()
+        .Where(x => x.UserId == user.Id && x.IsActive && x.Tenant!.Status == TenantStatuses.Active)
+        .OrderBy(x => x.Tenant!.Name)
+        .Select(x => new { TenantId = x.TenantId, Name = x.Tenant!.Name, x.Role })
+        .ToListAsync();
+    return Results.Ok(rows);
+});
+
+workspaceApi.MapPost("/{tenantId:guid}/select", async (
+    Guid tenantId, ClaimsPrincipal principal, UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager, AppDbContext db) =>
+{
+    var user = await userManager.GetUserAsync(principal);
+    if (user is null) return Results.Unauthorized();
+    var membership = await db.TenantMemberships.AsNoTracking()
+        .Where(x => x.UserId == user.Id && x.TenantId == tenantId && x.IsActive &&
+            x.Tenant!.Status == TenantStatuses.Active)
+        .Select(x => new { x.TenantId, x.Role, TenantName = x.Tenant!.Name })
+        .FirstOrDefaultAsync();
+    if (membership is null)
+        return Results.Forbid();
+
+    await signInManager.SignInWithClaimsAsync(user, isPersistent: false, additionalClaims:
+    [
+        new Claim(TenantContext.TenantIdClaimType, membership.TenantId.ToString()),
+        new Claim(TenantRoleAuthorization.RoleClaimType, membership.Role)
+    ]);
+    return Results.Ok(new { message = "شرکت فعال انتخاب شد.", tenantId = membership.TenantId, membership.TenantName });
+});
+
 var accountingApi = app.MapGroup("/api/accounting")
     .RequireAuthorization("TenantRequired")
     .RequireAuthorization("TenantRead");
