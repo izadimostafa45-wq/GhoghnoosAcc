@@ -37,6 +37,16 @@
     const count = document.getElementById('partyCount'), empty = document.getElementById('emptyState');
     let parties = [];
     const safe = value => String(value ?? '');
+    async function readResponse(response) {
+        const body = await response.text();
+        if (!body.trim()) {
+            if (response.status === 403) return { detail: 'دسترسی به اطلاعات اشخاص رد شد. برای ادامه، با حساب دارای عضویت معتبر در شرکت وارد شوید.' };
+            if (response.status === 401) return { detail: 'نشست شما منقضی شده است؛ دوباره وارد سامانه شوید.' };
+            return { detail: response.ok ? 'سرور پاسخ خالی برگرداند.' : 'خطای سرور (' + response.status + ').' };
+        }
+        try { return JSON.parse(body); }
+        catch { return { detail: 'پاسخ سرور معتبر نیست (' + response.status + ').' }; }
+    }
     function render() {
         const q = search.value.trim().toLocaleLowerCase();
         const filtered = parties.filter(p => [p.name,p.phone,p.address].some(v => safe(v).toLocaleLowerCase().includes(q)));
@@ -57,7 +67,7 @@
                 const address = prompt('نشانی', party.address || ''); if (address === null) return;
                 try {
                     const response = await fetch('/api/accounting/parties/' + party.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,address})});
-                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'ویرایش ناموفق بود.');
+                    const result = await readResponse(response); if (!response.ok) throw new Error(result.message || result.detail || 'ویرایش ناموفق بود.');
                     message.textContent = 'اطلاعات شخص به‌روزرسانی شد.'; await load();
                 } catch (error) { message.textContent = error.message || 'ویرایش ناموفق بود.'; }
             });
@@ -66,7 +76,7 @@
                 if (!confirm('وضعیت این شخص تغییر کند؟')) return;
                 try {
                     const response = await fetch('/api/accounting/parties/' + party.id + '/toggle-active', {method:'POST'});
-                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'تغییر وضعیت ناموفق بود.');
+                    const result = await readResponse(response); if (!response.ok) throw new Error(result.message || result.detail || 'تغییر وضعیت ناموفق بود.');
                     message.textContent = result.message || 'وضعیت تغییر کرد.'; await load();
                 } catch (error) { message.textContent = error.message || 'تغییر وضعیت ناموفق بود.'; }
             });
@@ -79,7 +89,7 @@
     async function load() {
         count.textContent = 'در حال بارگذاری…';
         try {
-            const response = await fetch('/api/accounting/parties'), data = await response.json();
+            const response = await fetch('/api/accounting/parties'), data = await readResponse(response);
             if (!response.ok) throw new Error(data.detail || data.message || 'دریافت فهرست اشخاص ناموفق بود.');
             parties = data; render();
         } catch (error) {
@@ -93,7 +103,7 @@
         button.disabled = true; message.textContent = 'در حال ثبت…';
         try {
             const response = await fetch('/api/accounting/parties', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('name').value.trim(),phone:document.getElementById('phone').value.trim(),address:document.getElementById('address').value.trim()})});
-            const data = await response.json();
+            const data = await readResponse(response);
             if (!response.ok) throw new Error(data.detail || data.message || 'ثبت شخص ناموفق بود.');
             form.reset(); message.textContent = 'شخص با موفقیت ثبت شد.'; await load();
         } catch (error) { message.textContent = error.message || 'ارتباط با سرور برقرار نشد.'; }
