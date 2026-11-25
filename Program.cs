@@ -717,7 +717,7 @@ public sealed record UpdateAccountRequest(string? Code, string? Title, string? T
 public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
 
 
-accountingApi.MapGet("/invoices", async (IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
@@ -729,7 +729,7 @@ accountingApi.MapGet("/invoices", async (IServiceProvider services, ITenantConte
     return Results.Ok(rows);
 });
 
-accountingApi.MapPost("/invoices", async (InvoiceCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
@@ -740,7 +740,7 @@ accountingApi.MapPost("/invoices", async (InvoiceCreateRequest request, IService
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
         x.Quantity <= 0 || x.UnitPrice < 0 || x.TaxRate < 0 || x.TaxRate > 100 ||
-        decimal.Round(x.Quantity * x.UnitPrice, 2) != decimal.Round(x.Quantity * x.UnitPrice, 2)))
+        decimal.Round(x.Quantity * x.UnitPrice, 2) < 0))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
@@ -762,7 +762,7 @@ accountingApi.MapPost("/invoices", async (InvoiceCreateRequest request, IService
     return Results.Created($"/api/accounting/invoices/{invoice.Id}", new { invoice.Id, invoice.Number, invoice.Kind, invoice.Status, invoice.Subtotal, invoice.TaxTotal, invoice.Total });
 }).RequireAuthorization("TenantWrite");
 
-accountingApi.MapPost("/invoices/{id:int}/post", async (int id, IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
@@ -809,7 +809,7 @@ accountingApi.MapPost("/invoices/{id:int}/post", async (int id, IServiceProvider
     return Results.Ok(new { message = "فاکتور ثبت نهایی شد و سند حسابداری " + journal.DocumentNumber + " ایجاد شد.", invoice.Id, journalEntryId = journal.Id, journal.DocumentNumber });
 }).RequireAuthorization("TenantWrite");
 
-accountingApi.MapGet("/payments", async (IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapGet("/payments", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
@@ -823,7 +823,7 @@ accountingApi.MapGet("/payments", async (IServiceProvider services, ITenantConte
     return Results.Ok(rows);
 });
 
-accountingApi.MapPost("/payments", async (PaymentCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
