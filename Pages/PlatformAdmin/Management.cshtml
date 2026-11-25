@@ -107,13 +107,19 @@
                 select.addEventListener('click', () => selectCompany(company));
                 const manage = el('button', 'کاربران'); manage.type = 'button'; manage.className = 'btn btn-outline-secondary btn-sm me-1';
                 manage.addEventListener('click', () => loadUsers(company));
+                const rename = el('button', 'ویرایش نام'); rename.type = 'button'; rename.className = 'btn btn-outline-secondary btn-sm me-1 mt-1';
+                rename.addEventListener('click', async () => {
+                    const name = prompt('نام شرکت', company.name); if (name === null || !name.trim()) return;
+                    try { await request('/api/platform-admin/companies/' + company.id, { method: 'PUT', body: JSON.stringify({ name }) }); showNotice('نام شرکت به‌روزرسانی شد.'); await loadCompanies(); }
+                    catch (e) { showNotice(e.message, true); }
+                });
                 const toggle = el('button', company.status === 'Active' ? 'غیرفعال‌کردن' : 'فعال‌کردن'); toggle.type = 'button'; toggle.className = 'btn btn-outline-danger btn-sm mt-1';
                 toggle.addEventListener('click', async () => {
                     if (!confirm('وضعیت شرکت «' + company.name + '» تغییر کند؟')) return;
                     try { await request('/api/platform-admin/companies/' + company.id + '/toggle-status', { method: 'POST' }); showNotice('وضعیت شرکت تغییر کرد.'); await loadCompanies(); }
                     catch (e) { showNotice(e.message, true); }
                 });
-                actions.append(select, manage, toggle); tr.appendChild(actions); companyRows.appendChild(tr);
+                actions.append(select, manage, rename, toggle); tr.appendChild(actions); companyRows.appendChild(tr);
             }
         } catch (e) { companyRows.replaceChildren(); const tr=el('tr','');const td=el('td',e.message);td.colSpan=4;tr.appendChild(td);companyRows.appendChild(tr);showNotice(e.message,true); }
     }
