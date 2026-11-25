@@ -18,8 +18,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<Account>().HasIndex(x => x.Code).IsUnique();
-        modelBuilder.Entity<JournalEntry>().HasIndex(x => x.DocumentNumber).IsUnique();
+        modelBuilder.Entity<Account>().HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+        modelBuilder.Entity<JournalEntry>().HasIndex(x => new { x.TenantId, x.DocumentNumber }).IsUnique();
+
+        modelBuilder.Entity<Account>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Party>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<JournalEntry>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<JournalEntryLine>().HasOne(x => x.Tenant).WithMany()
+            .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Account>().HasOne(x => x.ParentAccount).WithMany()
             .HasForeignKey(x => x.ParentAccountId).OnDelete(DeleteBehavior.Restrict);
