@@ -54,6 +54,28 @@ public sealed class TenantRoleAuthorizationTests
         Assert.False(TenantRoleAuthorization.HasAnyRole(principal, TenantRoleAuthorization.WriteRoles));
     }
 
+    [Theory]
+    [InlineData(TenantRoles.Owner)]
+    [InlineData(TenantRoles.Admin)]
+    [InlineData(TenantRoles.Accountant)]
+    [InlineData(TenantRoles.Sales)]
+    [InlineData(TenantRoles.Service)]
+    [InlineData(TenantRoles.ReadOnly)]
+    public void IsKnownRole_AcceptsOnlySupportedRoles(string role)
+    {
+        Assert.True(TenantRoleAuthorization.IsKnownRole(role));
+    }
+
+    [Theory]
+    [InlineData("owner")]
+    [InlineData("SuperAdmin")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void IsKnownRole_RejectsUnsupportedRoles(string? role)
+    {
+        Assert.False(TenantRoleAuthorization.IsKnownRole(role));
+    }
+
     private static ClaimsPrincipal Principal(Guid tenantId, string role) =>
         new(new ClaimsIdentity(
         [
