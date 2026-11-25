@@ -28,6 +28,9 @@
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Parties" ? "active" : "")" asp-area="" asp-page="/Accounting/Parties">مدیریت اشخاص</a>
                     </div>
                 </details>
+                <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Entries" ? "active" : "")" asp-area="" asp-page="/Accounting/Entries">
+                    <span class="nav-icon">▧</span><span>دفتر اسناد</span>
+                </a>
                 <a class="side-link" asp-area="" asp-page="/Accounting/Index">
                     <span class="nav-icon">▧</span><span>ثبت سند حسابداری</span>
                 </a>
