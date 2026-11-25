@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using GhoghnoosAcc.Data;
 using GhoghnoosAcc.Models;
@@ -46,9 +47,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 builder.Services.AddAuthorization(options =>
 {
-    // Accounting data must stay inaccessible until the authenticated user has a
-    // valid server-issued tenant claim. Membership validation and claim issuance
-    // are implemented as a separate provisioning step.
+    // Accounting access requires a valid tenant claim and a live database check
+    // for tenant status and membership on each protected request.
     options.AddPolicy("PlatformAdmin", policy => policy
         .RequireAuthenticatedUser()
         .RequireClaim(PlatformAdminAuthorization.ClaimType, "true"));
