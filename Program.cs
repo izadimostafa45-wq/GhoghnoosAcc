@@ -162,6 +162,21 @@ platformAdminApi.MapPost("/companies", async (PlatformAdminCreateTenantRequest r
     });
 });
 
+platformAdminApi.MapPut("/companies/{tenantId:guid}", async (
+    Guid tenantId, PlatformAdminRenameTenantRequest request, AppDbContext db) =>
+{
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 160)
+        return Results.BadRequest(new { message = "نام شرکت الزامی است و حداکثر ۱۶۰ نویسه می‌تواند باشد." });
+    var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId);
+    if (tenant is null) return Results.NotFound(new { message = "شرکت پیدا نشد." });
+    if (await db.Tenants.AnyAsync(x => x.Id != tenantId && x.Name.ToLower() == name.ToLower()))
+        return Results.Conflict(new { message = "شرکت دیگری با این نام ثبت شده است." });
+    tenant.Name = name;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { tenant.Id, tenant.Name, tenant.Status, message = "مشخصات شرکت به‌روزرسانی شد." });
+});
+
 platformAdminApi.MapPost("/companies/{tenantId:guid}/select", async (
     Guid tenantId, ClaimsPrincipal principal, AppDbContext db,
     UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager) =>
@@ -1271,3 +1286,5 @@ public sealed record PlatformAdminCreateTenantRequest(string? Name);
 public sealed record PlatformAdminCreateUserRequest(string? Email, string? Password, string? Role);
 
 public sealed record PlatformAdminUpdateMembershipRoleRequest(string? Role);
+
+public sealed record PlatformAdminRenameTenantRequest(string? Name);
