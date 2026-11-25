@@ -566,7 +566,7 @@ accountingApi.MapGet("/reports/income-statement", async Task<IResult> (
 });
 
 accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
-    Guid? accountId,
+    int? accountId,
     DateTime? from,
     DateTime? to,
     IServiceProvider services,
@@ -877,3 +877,6 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
 
 
 app.Run();
+
+public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
+public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
