@@ -59,13 +59,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("TenantRead", policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
-            context.User, TenantRoleAuthorization.ReadRoles))
-        .AddRequirements(new TenantActiveRequirement()));
+            context.User, TenantRoleAuthorization.ReadRoles)));
     options.AddPolicy("TenantWrite", policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
-            context.User, TenantRoleAuthorization.WriteRoles))
-        .AddRequirements(new TenantActiveRequirement()));
+            context.User, TenantRoleAuthorization.WriteRoles)));
 });
 builder.Services.AddRazorPages(options =>
 {
