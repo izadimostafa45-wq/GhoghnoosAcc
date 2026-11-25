@@ -139,15 +139,22 @@
                 const tr=el('tr','');
                 tr.appendChild(el('td', user.email || user.userName || '—'));
                 const roles={Owner:'مالک شرکت',Admin:'مدیر شرکت',Accountant:'حسابدار',Sales:'فروشنده',Service:'خدمات',ReadOnly:'فقط مشاهده'};
-                tr.appendChild(el('td',roles[user.role] || user.role));
+                const roleCell=el('td',''); const roleSelect=document.createElement('select'); roleSelect.className='form-select form-select-sm';
+                for(const [value,label] of Object.entries(roles)){const option=el('option',label);option.value=value;option.selected=value===user.role;roleSelect.appendChild(option);}
+                roleCell.appendChild(roleSelect);tr.appendChild(roleCell);
                 tr.appendChild(el('td',user.isActive?'فعال':'غیرفعال'));
-                const td=el('td',''); const toggle=el('button',user.isActive?'غیرفعال‌کردن عضویت':'فعال‌کردن عضویت');
-                toggle.type='button';toggle.className='btn btn-outline-secondary btn-sm';
+                const td=el('td',''); const saveRole=el('button','ذخیره نقش');saveRole.type='button';saveRole.className='btn btn-outline-primary btn-sm me-1';
+                saveRole.addEventListener('click',async()=>{
+                    try{await request('/api/platform-admin/companies/'+company.id+'/users/'+user.id+'/role',{method:'PUT',body:JSON.stringify({role:roleSelect.value})});showNotice('نقش کاربر به‌روزرسانی شد.');}
+                    catch(e){showNotice(e.message,true);}
+                });
+                const toggle=el('button',user.isActive?'غیرفعال‌کردن عضویت':'فعال‌کردن عضویت');
+                toggle.type='button';toggle.className='btn btn-outline-secondary btn-sm mt-1';
                 toggle.addEventListener('click',async()=>{
                     try{await request('/api/platform-admin/companies/'+company.id+'/users/'+user.id+'/toggle-active',{method:'POST'});showNotice('وضعیت عضویت تغییر کرد.');await loadUsers(company);}
                     catch(e){showNotice(e.message,true);}
                 });
-                td.appendChild(toggle);tr.appendChild(td);userRows.appendChild(tr);
+                td.append(saveRole,toggle);tr.appendChild(td);userRows.appendChild(tr);
             }
         } catch(e) { showNotice(e.message,true); }
     }
