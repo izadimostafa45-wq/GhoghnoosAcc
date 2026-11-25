@@ -10,7 +10,7 @@ namespace GhoghnoosAcc.Services;
 /// Revalidates the tenant and membership on every tenant-protected request so
 /// suspended companies and revoked memberships lose access without waiting for re-login.
 /// </summary>
-public sealed class TenantActiveRequirement : IAuthorizationRequirement;
+public sealed class TenantActiveRequirement : IAuthorizationRequirement { }
 
 public sealed class TenantActiveAuthorizationHandler(AppDbContext db)
     : AuthorizationHandler<TenantActiveRequirement>
