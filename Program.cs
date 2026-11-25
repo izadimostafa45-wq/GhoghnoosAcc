@@ -721,7 +721,7 @@ accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services
     var db = services.GetRequiredService<AppDbContext>();
     var rows = await db.Invoices.AsNoTracking().ForTenant(tenantId)
         .OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.Id)
-        .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, PartyName = x.Party.Name, x.Subtotal, x.TaxTotal, x.Total, x.JournalEntryId })
+        .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, PartyName = x.Party.Name, x.Subtotal, x.TaxTotal, x.Total, x.CounterpartyAccountId, x.OperatingAccountId, x.TaxAccountId, x.JournalEntryId })
         .ToListAsync();
     var invoiceIds = rows.Select(x => x.Id).ToList();
     var paidByInvoice = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
@@ -733,7 +733,7 @@ accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services
     {
         var amountPaid = paidByInvoice.GetValueOrDefault(x.Id, 0m);
         return new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, x.PartyName,
-            x.Subtotal, x.TaxTotal, x.Total, x.JournalEntryId, AmountPaid = amountPaid,
+            x.Subtotal, x.TaxTotal, x.Total, x.CounterpartyAccountId, x.OperatingAccountId, x.TaxAccountId, x.JournalEntryId, AmountPaid = amountPaid,
             Remaining = Math.Max(0m, x.Total - amountPaid) };
     }));
 });
