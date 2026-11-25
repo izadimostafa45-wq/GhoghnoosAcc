@@ -456,6 +456,47 @@ accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
 });
 
 
+accountingApi.MapGet("/reports/income-statement", async Task<IResult> (
+    DateTime? from,
+    DateTime? to,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نباید بعد از تاریخ پایان باشد." });
+
+    var start = from.HasValue ? DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc)
+        : DateTime.SpecifyKind(new DateTime(1900, 1, 1), DateTimeKind.Utc);
+    var endExclusive = to.HasValue ? DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc)
+        : DateTime.SpecifyKind(DateTime.MaxValue.Date, DateTimeKind.Utc);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var balances = await db.JournalEntryLines.AsNoTracking()
+        .ForTenant(tenantId)
+        .Where(line => line.TenantId == tenantId && line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.IsPosted
+            && line.JournalEntry.DocumentDate >= start && line.JournalEntry.DocumentDate < endExclusive
+            && (line.Account.Type == "Revenue" || line.Account.Type == "Expense"))
+        .GroupBy(line => new { line.AccountId, line.Account.Code, line.Account.Title, line.Account.Type })
+        .Select(group => new {
+            accountId = group.Key.AccountId, code = group.Key.Code, title = group.Key.Title, type = group.Key.Type,
+            debit = group.Sum(line => line.Debit), credit = group.Sum(line => line.Credit)
+        })
+        .OrderBy(row => row.type).ThenBy(row => row.code)
+        .ToListAsync();
+
+    var revenue = balances.Where(x => x.type == "Revenue").Sum(x => x.credit - x.debit);
+    var expenses = balances.Where(x => x.type == "Expense").Sum(x => x.debit - x.credit);
+    return Results.Ok(new {
+        from = from?.Date, to = to?.Date,
+        revenueAccounts = balances.Where(x => x.type == "Revenue"),
+        expenseAccounts = balances.Where(x => x.type == "Expense"),
+        revenueTotal = revenue, expenseTotal = expenses, netProfit = revenue - expenses
+    });
+});
+
 accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
     Guid? accountId,
     DateTime? from,
