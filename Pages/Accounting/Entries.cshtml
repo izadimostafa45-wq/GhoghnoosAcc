@@ -19,7 +19,7 @@
     </section>
     <section id="detailPanel" class="panel detail-panel" hidden>
         <div class="detail-heading"><div><h2 id="detailTitle">جزئیات سند</h2><p id="detailDescription"></p></div><button id="closeDetails" class="secondary" type="button">بستن</button></div>
-        <div class="table-scroll"><table><thead><tr><th>کد حساب</th><th>عنوان حساب</th><th>بدهکار</th><th>بستانکار</th><th>شرح ردیف</th></tr></thead><tbody id="detailRows"></tbody></table></div>
+        <div class="table-scroll"><table><thead><tr><th>کد حساب</th><th>عنوان حساب</th><th>شخص</th><th>بدهکار</th><th>بستانکار</th><th>شرح ردیف</th></tr></thead><tbody id="detailRows"></tbody></table></div>
     </section>
 </div>
 <style>
@@ -89,7 +89,7 @@
             const body=document.getElementById('detailRows');
             for(const line of data.lines||[]){
                 const tr=document.createElement('tr');
-                for(const v of [line.accountCode,line.accountTitle,num(line.debit),num(line.credit),line.description||'—']){
+                for(const v of [line.accountCode,line.accountTitle,line.partyName||'—',num(line.debit),num(line.credit),line.description||'—']){
                     const td=document.createElement('td');td.textContent=v;tr.appendChild(td);
                 }body.appendChild(tr);
             }
