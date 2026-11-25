@@ -1101,7 +1101,7 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
     {
         var subtotal = decimal.Round(x.Quantity * x.UnitPrice, 2);
         var tax = decimal.Round(subtotal * x.TaxRate / 100m, 2);
-        return new InvoiceLine { TenantId = tenantId, Description = x.Description.Trim(), Quantity = x.Quantity, UnitPrice = x.UnitPrice, TaxRate = x.TaxRate, LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax };
+        return new InvoiceLine { TenantId = tenantId, Description = x.Description!.Trim(), Quantity = x.Quantity, UnitPrice = x.UnitPrice, TaxRate = x.TaxRate, LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax };
     }).ToList();
     var invoice = new Invoice { TenantId = tenantId, Number = number, Kind = request.Kind, Status = InvoiceStatuses.Draft,
         InvoiceDate = DateTime.SpecifyKind(request.InvoiceDate.Date, DateTimeKind.Utc), PartyId = request.PartyId,
@@ -1160,7 +1160,7 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
     {
         var subtotal = decimal.Round(item.Quantity * item.UnitPrice, 2);
         var tax = decimal.Round(subtotal * item.TaxRate / 100m, 2);
-        invoice.Lines.Add(new InvoiceLine { TenantId = tenantId, Description = item.Description.Trim(),
+        invoice.Lines.Add(new InvoiceLine { TenantId = tenantId, Description = item.Description!.Trim(),
             Quantity = item.Quantity, UnitPrice = item.UnitPrice, TaxRate = item.TaxRate,
             LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax });
     }
