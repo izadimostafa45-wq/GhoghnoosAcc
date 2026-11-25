@@ -716,4 +716,161 @@ accountingApi.MapPost("/entries/{id:int}/post", async Task<IResult> (
 public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
 public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
 
+
+accountingApi.MapGet("/invoices", async (IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var rows = await db.Invoices.AsNoTracking().ForTenant(tenantId)
+        .OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.Id)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, PartyName = x.Party.Name, x.Subtotal, x.TaxTotal, x.Total, x.JournalEntryId })
+        .ToListAsync();
+    return Results.Ok(rows);
+});
+
+accountingApi.MapPost("/invoices", async (InvoiceCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var number = request.Number?.Trim();
+    if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
+    if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
+        x.Quantity <= 0 || x.UnitPrice < 0 || x.TaxRate < 0 || x.TaxRate > 100 ||
+        decimal.Round(x.Quantity * x.UnitPrice, 2) != decimal.Round(x.Quantity * x.UnitPrice, 2)))
+        return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
+    var db = services.GetRequiredService<AppDbContext>();
+    if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
+        return Results.BadRequest(new { message = "طرف حساب فعال پیدا نشد." });
+    if (await db.Invoices.ForTenant(tenantId).AnyAsync(x => x.Number == number))
+        return Results.Conflict(new { message = "شماره فاکتور قبلاً استفاده شده است." });
+    var lines = request.Lines.Select(x =>
+    {
+        var subtotal = decimal.Round(x.Quantity * x.UnitPrice, 2);
+        var tax = decimal.Round(subtotal * x.TaxRate / 100m, 2);
+        return new InvoiceLine { TenantId = tenantId, Description = x.Description.Trim(), Quantity = x.Quantity, UnitPrice = x.UnitPrice, TaxRate = x.TaxRate, LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax };
+    }).ToList();
+    var invoice = new Invoice { TenantId = tenantId, Number = number, Kind = request.Kind, Status = InvoiceStatuses.Draft,
+        InvoiceDate = DateTime.SpecifyKind(request.InvoiceDate.Date, DateTimeKind.Utc), PartyId = request.PartyId,
+        Notes = request.Notes?.Trim(), Lines = lines, Subtotal = lines.Sum(x => x.LineSubtotal), TaxTotal = lines.Sum(x => x.LineTax),
+        Total = lines.Sum(x => x.LineTotal) };
+    db.Invoices.Add(invoice);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/accounting/invoices/{invoice.Id}", new { invoice.Id, invoice.Number, invoice.Kind, invoice.Status, invoice.Subtotal, invoice.TaxTotal, invoice.Total });
+}).RequireAuthorization("TenantWrite");
+
+accountingApi.MapPost("/invoices/{id:int}/post", async (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).Include(x => x.Party).FirstOrDefaultAsync(x => x.Id == id);
+    if (invoice is null) return Results.NotFound(new { message = "فاکتور پیدا نشد." });
+    if (invoice.Status != InvoiceStatuses.Draft) return Results.Conflict(new { message = "فاکتور قبلاً ثبت نهایی شده است." });
+    var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
+    Account? FindSingle(Func<Account,bool> predicate) { var found = accounts.Where(predicate).ToList(); return found.Count == 1 ? found[0] : null; }
+    Account? counterparty = invoice.Kind == InvoiceKinds.Sales
+        ? FindSingle(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران")))
+        : FindSingle(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران")));
+    Account? operating = invoice.Kind == InvoiceKinds.Sales ? FindSingle(a => a.Type == "Revenue") : FindSingle(a => a.Type == "Expense");
+    Account? taxAccount = invoice.TaxTotal == 0 ? null : invoice.Kind == InvoiceKinds.Sales
+        ? FindSingle(a => a.Type == "Liability" && a.Title.Contains("مالیات"))
+        : FindSingle(a => a.Type == "Asset" && (a.Title.Contains("مالیات خرید") || a.Title.Contains("ارزش افزوده خرید")));
+    if (counterparty is null || operating is null || (invoice.TaxTotal > 0 && taxAccount is null))
+        return Results.Conflict(new { message = "برای ثبت خودکار، حساب‌های فعال و بدون ابهام تعریف کنید: " +
+            (invoice.Kind == InvoiceKinds.Sales ? "یک حساب دارایی با عنوان دریافتنی/مشتری، یک حساب درآمد" : "یک حساب بدهی با عنوان پرداختنی/تأمین‌کننده، یک حساب هزینه") +
+            (invoice.TaxTotal > 0 ? " و حساب مالیات متناسب با نوع فاکتور." : ".") });
+    var docNo = "INV-" + invoice.Number;
+    if (await db.JournalEntries.ForTenant(tenantId).AnyAsync(x => x.DocumentNumber == docNo))
+        return Results.Conflict(new { message = "شماره سند حسابداری مرتبط تکراری است؛ شماره فاکتور را بررسی کنید." });
+    var journal = new JournalEntry { TenantId = tenantId, DocumentNumber = docNo,
+        DocumentDate = DateTime.SpecifyKind(invoice.InvoiceDate.Date, DateTimeKind.Utc),
+        Description = (invoice.Kind == InvoiceKinds.Sales ? "فاکتور فروش " : "فاکتور خرید ") + invoice.Number,
+        IsPosted = true };
+    if (invoice.Kind == InvoiceKinds.Sales)
+    {
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = counterparty.Id, PartyId = invoice.PartyId, Debit = invoice.Total, Description = "مانده فاکتور" });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = operating.Id, PartyId = invoice.PartyId, Credit = invoice.Subtotal, Description = "فروش" });
+        if (invoice.TaxTotal > 0) journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = taxAccount!.Id, PartyId = invoice.PartyId, Credit = invoice.TaxTotal, Description = "مالیات فروش" });
+    }
+    else
+    {
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = operating.Id, PartyId = invoice.PartyId, Debit = invoice.Subtotal, Description = "خرید" });
+        if (invoice.TaxTotal > 0) journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = taxAccount!.Id, PartyId = invoice.PartyId, Debit = invoice.TaxTotal, Description = "مالیات خرید" });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = counterparty.Id, PartyId = invoice.PartyId, Credit = invoice.Total, Description = "مانده فاکتور" });
+    }
+    invoice.Status = InvoiceStatuses.Posted;
+    invoice.JournalEntry = journal;
+    db.JournalEntries.Add(journal);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "فاکتور ثبت نهایی شد و سند حسابداری " + journal.DocumentNumber + " ایجاد شد.", invoice.Id, journalEntryId = journal.Id, journal.DocumentNumber });
+}).RequireAuthorization("TenantWrite");
+
+accountingApi.MapGet("/payments", async (IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var rows = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
+        .OrderByDescending(x => x.PaymentDate).ThenByDescending(x => x.Id)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.PaymentDate, x.PartyId, PartyName = x.Party.Name,
+            CashAccountTitle = x.CashAccount.Title, x.InvoiceId, InvoiceNumber = x.Invoice == null ? null : x.Invoice.Number,
+            x.Amount, JournalEntryNumber = x.JournalEntry == null ? null : x.JournalEntry.DocumentNumber })
+        .ToListAsync();
+    return Results.Ok(rows);
+});
+
+accountingApi.MapPost("/payments", async (PaymentCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var number = request.Number?.Trim();
+    if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.PaymentDate == default ||
+        (request.Kind != PaymentKinds.Receipt && request.Kind != PaymentKinds.Payment) ||
+        request.PartyId <= 0 || request.CashAccountId <= 0 || request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
+        return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب، حساب صندوق/بانک و مبلغ معتبر الزامی است." });
+    var db = services.GetRequiredService<AppDbContext>();
+    if (await db.PaymentTransactions.ForTenant(tenantId).AnyAsync(x => x.Number == number))
+        return Results.Conflict(new { message = "شماره رسید/پرداخت تکراری است." });
+    var party = await db.Parties.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == request.PartyId && x.IsActive);
+    var cash = await db.Accounts.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == request.CashAccountId && x.IsActive && x.Type == "Asset");
+    if (party is null || cash is null) return Results.BadRequest(new { message = "طرف حساب فعال یا حساب دارایی صندوق/بانک معتبر پیدا نشد." });
+    var invoice = request.InvoiceId.HasValue ? await db.Invoices.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == request.InvoiceId.Value && x.Status == InvoiceStatuses.Posted && x.PartyId == party.Id) : null;
+    if (request.InvoiceId.HasValue && invoice is null) return Results.BadRequest(new { message = "فاکتور ثبت‌نهایی‌شده متعلق به این طرف حساب پیدا نشد." });
+    if (invoice is null) return Results.BadRequest(new { message = "برای جلوگیری از ثبت نادرست حساب طرف مقابل، در این نسخه دریافت/پرداخت باید به فاکتور ثبت‌نهایی‌شده متصل باشد." });
+    if (request.Amount > invoice.Total) return Results.BadRequest(new { message = "مبلغ عملیات نمی‌تواند از مبلغ کل فاکتور بیشتر باشد." });
+    var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
+    var counterpart = invoice.Kind == InvoiceKinds.Sales
+        ? accounts.SingleOrDefaultSafe(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران")))
+        : accounts.SingleOrDefaultSafe(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران")));
+    if (counterpart is null) return Results.Conflict(new { message = "حساب دریافتنی/پرداختنی فاکتور مشخص نیست؛ ابتدا عنوان حساب را تنظیم کنید." });
+    var journal = new JournalEntry { TenantId = tenantId, DocumentNumber = "PAY-" + number,
+        DocumentDate = DateTime.SpecifyKind(request.PaymentDate.Date, DateTimeKind.Utc),
+        Description = (request.Kind == PaymentKinds.Receipt ? "دریافت " : "پرداخت ") + number,
+        IsPosted = true };
+    if (request.Kind == PaymentKinds.Receipt)
+    {
+        if (invoice.Kind != InvoiceKinds.Sales) return Results.BadRequest(new { message = "برای فاکتور خرید باید پرداخت ثبت کنید، نه دریافت." });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = cash.Id, PartyId = party.Id, Debit = request.Amount, Description = "دریافت وجه" });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = counterpart.Id, PartyId = party.Id, Credit = request.Amount, Description = "تسویه فاکتور فروش" });
+    }
+    else
+    {
+        if (invoice.Kind != InvoiceKinds.Purchase) return Results.BadRequest(new { message = "برای فاکتور فروش باید دریافت ثبت کنید، نه پرداخت." });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = counterpart.Id, PartyId = party.Id, Debit = request.Amount, Description = "تسویه فاکتور خرید" });
+        journal.Lines.Add(new JournalEntryLine { TenantId = tenantId, AccountId = cash.Id, PartyId = party.Id, Credit = request.Amount, Description = "پرداخت وجه" });
+    }
+    var payment = new PaymentTransaction { TenantId = tenantId, Number = number, Kind = request.Kind,
+        PaymentDate = DateTime.SpecifyKind(request.PaymentDate.Date, DateTimeKind.Utc), PartyId = party.Id, CashAccountId = cash.Id,
+        InvoiceId = invoice.Id, JournalEntry = journal, Amount = request.Amount, Notes = request.Notes?.Trim() };
+    db.PaymentTransactions.Add(payment);
+    db.JournalEntries.Add(journal);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/accounting/payments/{payment.Id}", new { message = "عملیات دریافت/پرداخت و سند " + journal.DocumentNumber + " ثبت شد.", payment.Id, journalEntryId = journal.Id });
+}).RequireAuthorization("TenantWrite");
+
+
 app.Run();
