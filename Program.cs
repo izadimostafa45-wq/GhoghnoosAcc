@@ -390,4 +390,86 @@ accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
     });
 });
 
+
+accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
+    Guid? accountId,
+    DateTime? from,
+    DateTime? to,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+    if (accountId is null)
+        return Results.BadRequest(new { message = "انتخاب حساب الزامی است." });
+    if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نباید بعد از تاریخ پایان باشد." });
+
+    var start = from.HasValue
+        ? DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc)
+        : DateTime.SpecifyKind(new DateTime(1900, 1, 1), DateTimeKind.Utc);
+    var endExclusive = to.HasValue
+        ? DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc)
+        : DateTime.SpecifyKind(DateTime.MaxValue.Date, DateTimeKind.Utc);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var account = await db.Accounts.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.Id == accountId.Value)
+        .Select(x => new { x.Id, x.Code, x.Title })
+        .FirstOrDefaultAsync();
+    if (account is null)
+        return Results.NotFound(new { message = "حساب انتخاب‌شده پیدا نشد." });
+
+    var lines = await db.JournalEntryLines.AsNoTracking()
+        .ForTenant(tenantId)
+        .Where(line => line.TenantId == tenantId
+            && line.AccountId == account.Id
+            && line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.DocumentDate >= start
+            && line.JournalEntry.DocumentDate < endExclusive)
+        .OrderBy(line => line.JournalEntry.DocumentDate)
+        .ThenBy(line => line.JournalEntry.Id)
+        .ThenBy(line => line.Id)
+        .Select(line => new
+        {
+            line.Id,
+            line.JournalEntry.DocumentNumber,
+            line.JournalEntry.DocumentDate,
+            line.JournalEntry.Description,
+            line.Debit,
+            line.Credit,
+            line.Description
+        })
+        .ToListAsync();
+
+    decimal runningBalance = 0m;
+    var ledgerLines = lines.Select(line =>
+    {
+        runningBalance += line.Debit - line.Credit;
+        return new
+        {
+            line.Id,
+            line.DocumentNumber,
+            line.DocumentDate,
+            documentDescription = line.Description == null ? line.Description : line.Description,
+            line.Debit,
+            line.Credit,
+            balance = runningBalance
+        };
+    }).ToList();
+
+    return Results.Ok(new
+    {
+        account,
+        from = from?.Date,
+        to = to?.Date,
+        lines = ledgerLines,
+        debitTotal = lines.Sum(x => x.Debit),
+        creditTotal = lines.Sum(x => x.Credit),
+        endingBalance = runningBalance
+    });
+});
+
 app.Run();
