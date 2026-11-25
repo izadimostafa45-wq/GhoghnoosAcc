@@ -20,6 +20,7 @@ public sealed record PaymentCreateRequest(
     DateTime PaymentDate,
     int PartyId,
     int CashAccountId,
+    int CounterpartyAccountId,
     int? InvoiceId,
     decimal Amount,
     string? Notes);
