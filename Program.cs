@@ -437,10 +437,10 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
             line.Id,
             line.JournalEntry.DocumentNumber,
             line.JournalEntry.DocumentDate,
-            line.JournalEntry.Description,
+            DocumentDescription = line.JournalEntry.Description,
             line.Debit,
             line.Credit,
-            line.Description
+            LineDescription = line.Description
         })
         .ToListAsync();
 
@@ -453,7 +453,8 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
             line.Id,
             line.DocumentNumber,
             line.DocumentDate,
-            documentDescription = line.Description == null ? line.Description : line.Description,
+            documentDescription = line.DocumentDescription,
+            lineDescription = line.LineDescription,
             line.Debit,
             line.Credit,
             balance = runningBalance
