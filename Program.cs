@@ -713,9 +713,6 @@ accountingApi.MapPost("/entries/{id:int}/post", async Task<IResult> (
     });
 }).RequireAuthorization("TenantWrite");
 
-public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
-public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
-
 
 accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
@@ -841,7 +838,12 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     var invoice = request.InvoiceId.HasValue ? await db.Invoices.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == request.InvoiceId.Value && x.Status == InvoiceStatuses.Posted && x.PartyId == party.Id) : null;
     if (request.InvoiceId.HasValue && invoice is null) return Results.BadRequest(new { message = "فاکتور ثبت‌نهایی‌شده متعلق به این طرف حساب پیدا نشد." });
     if (invoice is null) return Results.BadRequest(new { message = "برای جلوگیری از ثبت نادرست حساب طرف مقابل، در این نسخه دریافت/پرداخت باید به فاکتور ثبت‌نهایی‌شده متصل باشد." });
-    if (request.Amount > invoice.Total) return Results.BadRequest(new { message = "مبلغ عملیات نمی‌تواند از مبلغ کل فاکتور بیشتر باشد." });
+    var alreadyPaid = await db.PaymentTransactions.ForTenant(tenantId)
+        .Where(x => x.InvoiceId == invoice.Id)
+        .SumAsync(x => (decimal?)x.Amount) ?? 0m;
+    var remaining = invoice.Total - alreadyPaid;
+    if (request.Amount > remaining)
+        return Results.BadRequest(new { message = "مبلغ عملیات از مانده فاکتور بیشتر است.", invoiceTotal = invoice.Total, alreadyPaid, remaining });
     var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
     var counterpartCandidates = invoice.Kind == InvoiceKinds.Sales
         ? accounts.Where(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران"))).ToList()
