@@ -1,0 +1,72 @@
+@page
+@{
+    ViewData["Title"] = "ترازنامه";
+}
+<div dir="rtl" style="max-width:1100px;margin:auto;font-family:Tahoma,Arial,sans-serif">
+    <h1>ترازنامه</h1>
+    <p>وضعیت دارایی‌ها، بدهی‌ها و حقوق مالکانه تا تاریخ انتخابی، بر اساس اسناد ثبت‌نهایی‌شده.</p>
+    <form id="filters" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:20px 0">
+        <label>تا تاریخ <input id="asOf" type="date" style="display:block;padding:9px;margin-top:5px" /></label>
+        <button type="submit" style="padding:10px 18px">نمایش ترازنامه</button>
+        <button type="button" id="export" style="padding:10px 18px">خروجی CSV</button>
+    </form>
+    <p id="message" role="status" style="white-space:pre-wrap"></p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0">
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>جمع دارایی‌ها</div><strong id="assets">—</strong></div>
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>جمع بدهی‌ها</div><strong id="liabilities">—</strong></div>
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>حقوق مالکانه</div><strong id="equity">—</strong></div>
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>اختلاف تراز</div><strong id="difference">—</strong></div>
+    </div>
+    <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">گروه</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">کد</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">عنوان حساب</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">بدهکار</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">بستانکار</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">مانده</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6">در حال دریافت گزارش…</td></tr></tbody>
+        </table>
+    </div>
+</div>
+<script>
+(() => {
+    const $ = id => document.getElementById(id);
+    let report = null;
+    const fmt = value => Number(value || 0).toLocaleString('fa-IR', {maximumFractionDigits:2});
+    async function load() {
+        $('message').textContent = 'در حال دریافت ترازنامه…';
+        const params = new URLSearchParams(); if ($('asOf').value) params.set('asOf', $('asOf').value);
+        try {
+            const response = await fetch('/api/accounting/reports/balance-sheet?' + params.toString());
+            const data = await response.json(); if (!response.ok) throw new Error(data.message || data.detail || 'دریافت ترازنامه ناموفق بود.');
+            report = data;
+            $('assets').textContent = fmt(data.assetsTotal) + ' ریال';
+            $('liabilities').textContent = fmt(data.liabilitiesTotal) + ' ریال';
+            $('equity').textContent = fmt(data.equityTotal) + ' ریال';
+            $('difference').textContent = fmt(data.difference) + ' ریال';
+            const all = [
+                ...data.assetAccounts.map(x => ({...x,label:'دارایی',balance:x.debit-x.credit})),
+                ...data.liabilityAccounts.map(x => ({...x,label:'بدهی',balance:x.credit-x.debit})),
+                ...data.equityAccounts.map(x => ({...x,label:'حقوق مالکانه',balance:x.credit-x.debit}))
+            ];
+            const body=$('rows'); body.replaceChildren();
+            for (const item of all) {
+                const tr=document.createElement('tr');
+                for (const value of [item.label,item.code,item.title,fmt(item.debit),fmt(item.credit),fmt(item.balance)]) {
+                    const td=document.createElement('td'); td.textContent=value; td.style.padding='10px'; td.style.borderBottom='1px solid #eee'; tr.appendChild(td);
+                }
+                body.appendChild(tr);
+            }
+            if (!all.length) { const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=6;td.textContent='در این تاریخ حساب ترازنامه‌ای ثبت‌نهایی‌شده‌ای وجود ندارد.';tr.appendChild(td);body.appendChild(tr); }
+            $('message').textContent = Math.abs(Number(data.difference)) < 0.005 ? 'ترازنامه بر اساس حساب‌های طبقه‌بندی‌شده متوازن است.' : 'توجه: ترازنامه اختلاف دارد؛ طبقه‌بندی حساب‌ها و ثبت اسناد را بررسی کنید.';
+        } catch(error) { $('message').textContent=error.message || 'ارتباط با سرور برقرار نشد.'; }
+    }
+    $('filters').addEventListener('submit',e=>{e.preventDefault();load();});
+    $('export').addEventListener('click',()=>{
+        if(!report){$('message').textContent='ابتدا گزارش را بارگذاری کنید.';return;}
+        const rows=[['گروه','کد','عنوان','بدهکار','بستانکار','مانده']];
+        for(const x of report.assetAccounts)rows.push(['دارایی',x.code,x.title,x.debit,x.credit,x.debit-x.credit]);
+        for(const x of report.liabilityAccounts)rows.push(['بدهی',x.code,x.title,x.debit,x.credit,x.credit-x.debit]);
+        for(const x of report.equityAccounts)rows.push(['حقوق مالکانه',x.code,x.title,x.debit,x.credit,x.credit-x.debit]);
+        const csv='\uFEFF'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+        const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='balance-sheet.csv';a.click();URL.revokeObjectURL(url);
+    });
+    load();
+})();
+</script>
