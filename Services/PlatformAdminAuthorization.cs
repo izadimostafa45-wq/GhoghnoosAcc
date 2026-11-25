@@ -7,5 +7,5 @@ namespace GhoghnoosAcc.Services;
 public static class PlatformAdminAuthorization
 {
     public const string ClaimType = "ghoghnoos:platform_admin";
-    public const string DefaultEmail = "ghoghnoos.office@gmil.com";
+    public const string DefaultEmail = "ghoghnoos.office@gmail.com";
 }
