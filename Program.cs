@@ -317,6 +317,21 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     });
 }).RequireAuthorization("TenantWrite");
 
+accountingApi.MapDelete("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var entry = await db.JournalEntries.ForTenant(tenantId)
+        .Include(x => x.Lines)
+        .FirstOrDefaultAsync(x => x.Id == id);
+    if (entry is null) return Results.NotFound(new { message = "سند پیدا نشد." });
+    if (entry.IsPosted) return Results.Conflict(new { message = "سند ثبت‌نهایی‌شده قابل حذف نیست." });
+    db.JournalEntries.Remove(entry);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "پیش‌نویس سند حذف شد.", entry.Id, entry.DocumentNumber });
+}).RequireAuthorization("TenantWrite");
+
 accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId)
