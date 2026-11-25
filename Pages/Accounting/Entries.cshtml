@@ -1,0 +1,93 @@
+@page
+@{
+    ViewData["Title"] = "دفتر اسناد";
+}
+<div class="entries-page" dir="rtl">
+    <section class="page-intro">
+        <div><span class="eyebrow">حسابداری مالی</span><h1>دفتر اسناد حسابداری</h1><p>اسناد ثبت‌شده را جست‌وجو کنید، وضعیت تراز را ببینید و جزئیات هر سند را باز کنید.</p></div>
+        <a class="primary-link" href="/Accounting/Index">＋ ثبت سند جدید</a>
+    </section>
+    <section class="panel">
+        <div class="filters">
+            <label class="search-field">جست‌وجو<input id="entrySearch" type="search" placeholder="شماره سند یا شرح سند" /></label>
+            <label>وضعیت<select id="entryStatus"><option value="all">همه اسناد</option><option value="draft">پیش‌نویس</option><option value="posted">ثبت نهایی</option><option value="balanced">متوازن</option><option value="unbalanced">نامتوازن</option></select></label>
+            <button id="refreshEntries" type="button" class="secondary">بازخوانی</button>
+        </div>
+        <div class="summary-strip"><div><span>تعداد اسناد</span><strong id="totalEntries">—</strong></div><div><span>جمع بدهکار</span><strong id="totalDebit">—</strong></div><div><span>جمع بستانکار</span><strong id="totalCredit">—</strong></div></div>
+        <div class="table-scroll"><table><thead><tr><th>شماره سند</th><th>تاریخ</th><th>شرح</th><th>بدهکار</th><th>بستانکار</th><th>وضعیت تراز</th><th>وضعیت سند</th><th></th></tr></thead><tbody id="entryRows"><tr><td colspan="8">در حال بارگذاری…</td></tr></tbody></table></div>
+        <p id="entryMessage" class="message" role="status"></p>
+    </section>
+    <section id="detailPanel" class="panel detail-panel" hidden>
+        <div class="detail-heading"><div><h2 id="detailTitle">جزئیات سند</h2><p id="detailDescription"></p></div><button id="closeDetails" class="secondary" type="button">بستن</button></div>
+        <div class="table-scroll"><table><thead><tr><th>کد حساب</th><th>عنوان حساب</th><th>بدهکار</th><th>بستانکار</th><th>شرح ردیف</th></tr></thead><tbody id="detailRows"></tbody></table></div>
+    </section>
+</div>
+<style>
+.entries-page{max-width:1500px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.page-intro{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:25px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.page-intro h1{font-size:25px;margin:9px 0}.page-intro p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.primary-link{background:#2677c9;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;white-space:nowrap;font-size:12px}.panel{padding:22px;background:#fff;border:1px solid #e2eaf4;border-radius:15px;margin-bottom:18px}.filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}.filters label{display:flex;flex-direction:column;gap:7px;color:#64768b;font-size:11px;font-weight:700}.filters input,.filters select{min-width:170px;padding:10px;border:1px solid #d9e3ef;border-radius:9px;font:inherit;font-size:12px;background:#fff}.filters .search-field{flex:1}.filters .search-field input{width:100%}.filters button,.detail-heading button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-size:12px;cursor:pointer}.secondary{background:#edf5ff;color:#2465a5}.summary-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}.summary-strip div{display:flex;flex-direction:column;gap:8px;padding:15px;border:1px solid #e5edf6;border-radius:11px;background:#f8fbff}.summary-strip span{font-size:11px;color:#8292a6}.summary-strip strong{font-size:17px;color:#2a4b6c;overflow-wrap:anywhere}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:780px}th,td{padding:12px 10px;text-align:right;border-bottom:1px solid #edf1f6;font-size:11px;line-height:1.8}th{background:#f7faff;color:#64768b}td{color:#435970}.view-button{border:0;border-radius:7px;background:#e8f3ff;color:#216bb0;padding:7px 10px;font:inherit;cursor:pointer}.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:10px;background:#edf2f7;color:#62758b}.pill.good{background:#e4f8ee;color:#16845d}.pill.bad{background:#fff0e4;color:#b56b24}.message{font-size:11px;color:#71849a;white-space:pre-wrap;line-height:1.8}.detail-panel[hidden]{display:none}.detail-heading{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:15px}.detail-heading h2{font-size:16px;margin:0 0 6px}.detail-heading p{font-size:11px;color:#8393a6;margin:0}@media(max-width:650px){.page-intro{align-items:start;flex-direction:column;padding:20px}.page-intro h1{font-size:21px}.panel{padding:14px}.summary-strip{gap:7px}.summary-strip div{padding:10px}.summary-strip strong{font-size:14px}}
+</style>
+<script>
+(() => {
+    const rows = document.getElementById('entryRows'), search = document.getElementById('entrySearch'), status = document.getElementById('entryStatus');
+    const message = document.getElementById('entryMessage');
+    let entries = [];
+    const num = v => Number(v || 0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+    const date = v => { if(!v)return '—'; const d=new Date(v); return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('fa-IR'); };
+    function render() {
+        const q=search.value.trim().toLocaleLowerCase();
+        const filtered=entries.filter(e=>{
+            const balanced=Math.abs(Number(e.debitTotal||0)-Number(e.creditTotal||0))<0.005;
+            return (!q || [e.documentNumber,e.description].some(v=>String(v||'').toLocaleLowerCase().includes(q)))
+                && (status.value==='all' || (status.value==='draft'&&!e.isPosted) || (status.value==='posted'&&e.isPosted) || (status.value==='balanced'&&balanced) || (status.value==='unbalanced'&&!balanced));
+        });
+        rows.replaceChildren();
+        for(const e of filtered){
+            const tr=document.createElement('tr');
+            const vals=[e.documentNumber,date(e.documentDate),e.description||'—',num(e.debitTotal),num(e.creditTotal)];
+            for(const v of vals){const td=document.createElement('td');td.textContent=v;tr.appendChild(td);}
+            const balance=document.createElement('td'), bp=document.createElement('span'), posted=document.createElement('td'), pp=document.createElement('span');
+            const balanced=Math.abs(Number(e.debitTotal||0)-Number(e.creditTotal||0))<0.005;
+            bp.className='pill '+(balanced?'good':'bad');bp.textContent=balanced?'متوازن':'نامتوازن';balance.appendChild(bp);
+            pp.className='pill '+(e.isPosted?'good':'');pp.textContent=e.isPosted?'ثبت نهایی':'پیش‌نویس';posted.appendChild(pp);
+            tr.appendChild(balance);tr.appendChild(posted);
+            const action=document.createElement('td'), button=document.createElement('button');button.className='view-button';button.textContent='جزئیات';button.addEventListener('click',()=>loadDetails(e.id));action.appendChild(button);tr.appendChild(action);rows.appendChild(tr);
+        }
+        if(!filtered.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.textContent='سندی برای نمایش پیدا نشد.';tr.appendChild(td);rows.appendChild(tr);}
+    }
+    async function loadEntries(){
+        message.textContent='در حال دریافت اسناد…';
+        try{
+            const response=await fetch('/api/accounting/entries'), data=await response.json();
+            if(!response.ok)throw new Error(data.detail||data.message||'دریافت اسناد ناموفق بود.');
+            entries=data;
+            document.getElementById('totalEntries').textContent=entries.length.toLocaleString('fa-IR');
+            document.getElementById('totalDebit').textContent=num(entries.reduce((s,e)=>s+Number(e.debitTotal||0),0))+' ریال';
+            document.getElementById('totalCredit').textContent=num(entries.reduce((s,e)=>s+Number(e.creditTotal||0),0))+' ریال';
+            message.textContent=entries.length>=200?'حداکثر ۲۰۰ سند اخیر نمایش داده می‌شود.':'';
+            render();
+        }catch(e){message.textContent=e.message||'ارتباط با سرور برقرار نشد.';}
+    }
+    async function loadDetails(id){
+        const panel=document.getElementById('detailPanel');panel.hidden=false;
+        document.getElementById('detailTitle').textContent='در حال بارگذاری جزئیات…';
+        document.getElementById('detailRows').replaceChildren();
+        try{
+            const response=await fetch('/api/accounting/entries/'+encodeURIComponent(id)), data=await response.json();
+            if(!response.ok)throw new Error(data.detail||data.message||'دریافت جزئیات ناموفق بود.');
+            document.getElementById('detailTitle').textContent=data.documentNumber+' · '+date(data.documentDate);
+            document.getElementById('detailDescription').textContent=data.description||'بدون شرح';
+            const body=document.getElementById('detailRows');
+            for(const line of data.lines||[]){
+                const tr=document.createElement('tr');
+                for(const v of [line.accountCode,line.accountTitle,num(line.debit),num(line.credit),line.description||'—']){
+                    const td=document.createElement('td');td.textContent=v;tr.appendChild(td);
+                }body.appendChild(tr);
+            }
+            panel.scrollIntoView({behavior:'smooth',block:'start'});
+        }catch(e){document.getElementById('detailTitle').textContent=e.message||'خطا';}
+    }
+    search.addEventListener('input',render);status.addEventListener('change',render);
+    document.getElementById('refreshEntries').addEventListener('click',loadEntries);
+    document.getElementById('closeDetails').addEventListener('click',()=>document.getElementById('detailPanel').hidden=true);
+    loadEntries();
+})();
+</script>
