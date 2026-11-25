@@ -29,6 +29,10 @@ public static class TenantRoleAuthorization
         TenantRoles.Accountant
     ];
 
+    public static bool IsKnownRole(string? role) =>
+        !string.IsNullOrWhiteSpace(role)
+        && ReadRoles.Contains(role, StringComparer.Ordinal);
+
     public static bool HasValidTenantAndRole(ClaimsPrincipal principal)
     {
         var tenantValue = principal.FindFirst(TenantContext.TenantIdClaimType)?.Value;
@@ -36,8 +40,7 @@ public static class TenantRoleAuthorization
 
         return Guid.TryParse(tenantValue, out var tenantId)
             && tenantId != Guid.Empty
-            && !string.IsNullOrWhiteSpace(role)
-            && ReadRoles.Contains(role, StringComparer.Ordinal);
+            && IsKnownRole(role);
     }
 
     public static bool HasAnyRole(ClaimsPrincipal principal, IEnumerable<string> allowedRoles) =>
