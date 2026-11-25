@@ -856,12 +856,11 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     var remaining = invoice.Total - alreadyPaid;
     if (request.Amount > remaining)
         return Results.BadRequest(new { message = "مبلغ عملیات از مانده فاکتور بیشتر است.", invoiceTotal = invoice.Total, alreadyPaid, remaining });
-    var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
-    var counterpartCandidates = invoice.Kind == InvoiceKinds.Sales
-        ? accounts.Where(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران"))).ToList()
-        : accounts.Where(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران"))).ToList();
-    var counterpart = counterpartCandidates.Count == 1 ? counterpartCandidates[0] : null;
-    if (counterpart is null) return Results.Conflict(new { message = "حساب دریافتنی/پرداختنی فاکتور مشخص نیست؛ ابتدا عنوان حساب را تنظیم کنید." });
+    var counterpartType = invoice.Kind == InvoiceKinds.Sales ? "Asset" : "Liability";
+    var counterpart = await db.Accounts.ForTenant(tenantId)
+        .FirstOrDefaultAsync(a => a.Id == request.CounterpartyAccountId && a.IsActive && a.Type == counterpartType);
+    if (counterpart is null)
+        return Results.BadRequest(new { message = "حساب دریافتنی/پرداختنی انتخاب‌شده معتبر نیست یا با نوع فاکتور سازگار نیست." });
     var journalNumber = "PAY-" + number;
     if (await db.JournalEntries.ForTenant(tenantId).AnyAsync(x => x.DocumentNumber == journalNumber))
         return Results.Conflict(new { message = "شماره سند حسابداری مرتبط تکراری است؛ شماره رسید/پرداخت را تغییر دهید." });
