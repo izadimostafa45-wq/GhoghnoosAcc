@@ -179,6 +179,41 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
 }).RequireAuthorization("TenantWrite");
 
+accountingApi.MapPut("/accounts/{id:int}", async Task<IResult> (int id, UpdateAccountRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var code = request.Code?.Trim();
+    var title = request.Title?.Trim();
+    var type = request.Type?.Trim();
+    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 || string.IsNullOrWhiteSpace(title) || title.Length > 200 || string.IsNullOrWhiteSpace(type) || type.Length > 30)
+        return Results.BadRequest(new { message = "کد، عنوان و نوع حساب را به‌درستی وارد کنید." });
+    var db = services.GetRequiredService<AppDbContext>();
+    var account = await db.Accounts.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
+    if (account is null) return Results.NotFound(new { message = "حساب پیدا نشد." });
+    if (await db.Accounts.ForTenant(tenantId).AnyAsync(x => x.Id != id && x.Code == code))
+        return Results.Conflict(new { message = "این کد حساب قبلاً استفاده شده است." });
+    var hasPostedLines = await db.JournalEntryLines.ForTenant(tenantId)
+        .AnyAsync(line => line.AccountId == id && line.JournalEntry.IsPosted);
+    if (hasPostedLines && (account.Code != code || account.Title != title || account.Type != type))
+        return Results.Conflict(new { message = "حساب در سند ثبت‌نهایی‌شده استفاده شده؛ کد، عنوان و نوع آن قابل تغییر نیست. فقط می‌توانید آن را غیرفعال کنید." });
+    account.Code = code; account.Title = title; account.Type = type;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
+}).RequireAuthorization("TenantWrite");
+
+accountingApi.MapPost("/accounts/{id:int}/toggle-active", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var account = await db.Accounts.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
+    if (account is null) return Results.NotFound(new { message = "حساب پیدا نشد." });
+    account.IsActive = !account.IsActive;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { account.Id, account.IsActive, message = account.IsActive ? "حساب فعال شد." : "حساب غیرفعال شد." });
+}).RequireAuthorization("TenantWrite");
+
 accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId)
@@ -339,6 +374,35 @@ accountingApi.MapPost("/parties", async Task<IResult> (CreatePartyRequest reques
         new { party.Id, party.Name, party.Phone, party.Address, party.IsActive });
 }).RequireAuthorization("TenantWrite");
 
+
+accountingApi.MapPut("/parties/{id:int}", async Task<IResult> (int id, UpdatePartyRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || (request.Phone?.Length ?? 0) > 30 || (request.Address?.Length ?? 0) > 300)
+        return Results.BadRequest(new { message = "نام الزامی است و طول فیلدها باید در محدوده مجاز باشد." });
+    var db = services.GetRequiredService<AppDbContext>();
+    var party = await db.Parties.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
+    if (party is null) return Results.NotFound(new { message = "شخص پیدا نشد." });
+    party.Name = name;
+    party.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+    party.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+    await db.SaveChangesAsync();
+    return Results.Ok(new { party.Id, party.Name, party.Phone, party.Address, party.IsActive });
+}).RequireAuthorization("TenantWrite");
+
+accountingApi.MapPost("/parties/{id:int}/toggle-active", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var party = await db.Parties.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
+    if (party is null) return Results.NotFound(new { message = "شخص پیدا نشد." });
+    party.IsActive = !party.IsActive;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { party.Id, party.IsActive, message = party.IsActive ? "شخص فعال شد." : "شخص غیرفعال شد." });
+}).RequireAuthorization("TenantWrite");
 
 accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
     DateTime? from,
@@ -527,5 +591,8 @@ accountingApi.MapPost("/entries/{id:int}/post", async Task<IResult> (
         creditTotal
     });
 }).RequireAuthorization("TenantWrite");
+
+public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
+public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
 
 app.Run();
