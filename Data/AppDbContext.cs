@@ -56,6 +56,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .HasPrincipalKey(x => new { x.TenantId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<Invoice>().HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<InvoiceLine>().HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<PaymentTransaction>().HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Invoice>().HasAlternateKey(x => new { x.TenantId, x.Id });
         modelBuilder.Entity<PaymentTransaction>().HasAlternateKey(x => new { x.TenantId, x.Id });
         modelBuilder.Entity<InvoiceLine>().HasOne(x => x.Invoice).WithMany(x => x.Lines)
