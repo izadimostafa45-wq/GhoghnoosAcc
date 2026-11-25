@@ -39,16 +39,28 @@
                 <details class="nav-group" open>
                     <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
                     <div class="sub-nav">
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">مدیریت حساب‌ها</a>
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">حساب‌های مالی</a>
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Parties" ? "active" : "")" asp-area="" asp-page="/Accounting/Parties">مدیریت اشخاص</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Invoices" ? "active" : "")" asp-area="" asp-page="/Accounting/Invoices">فروش و خرید</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Payments" ? "active" : "")" asp-area="" asp-page="/Accounting/Payments">دریافت و پرداخت</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/PartyBalances" ? "active" : "")" asp-area="" asp-page="/Accounting/PartyBalances">مانده حساب اشخاص</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/InvoiceBalances" ? "active" : "")" asp-area="" asp-page="/Accounting/InvoiceBalances">مانده فاکتورها</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/TrialBalance" ? "active" : "") asp-area="" asp-page="/Accounting/TrialBalance">تراز آزمایشی</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/GeneralLedger" ? "active" : "")" asp-area="" asp-page="/Accounting/GeneralLedger">دفتر کل</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/IncomeStatement" ? "active" : "")" asp-area="" asp-page="/Accounting/IncomeStatement">صورت سود و زیان</a>
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/BalanceSheet" ? "active" : "")" asp-area="" asp-page="/Accounting/BalanceSheet">ترازنامه</a>
+                    </div>
+                </details>
+                <details class="nav-group" open>
+                    <summary class="side-link"><span class="nav-icon">⇄</span><span>عملیات مالی</span><span class="nav-chevron">⌄</span></summary>
+                    <div class="sub-nav">
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Invoices" asp-route-kind="Sales">فاکتور فروش</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Invoices" asp-route-kind="Purchase">فاکتور خرید</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Payments" asp-route-kind="Receipt">سند دریافت وجه</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Payments" asp-route-kind="Payment">سند پرداخت وجه</a>
+                    </div>
+                </details>
+                <details class="nav-group">
+                    <summary class="side-link"><span class="nav-icon">▧</span><span>گزارش‌ها</span><span class="nav-chevron">⌄</span></summary>
+                    <div class="sub-nav">
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/PartyBalances">مانده حساب اشخاص</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/InvoiceBalances">مانده فاکتورها</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/TrialBalance">تراز آزمایشی</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/GeneralLedger">دفتر کل</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/IncomeStatement">صورت سود و زیان</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/BalanceSheet">ترازنامه</a>
                     </div>
                 </details>
                 <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Entries" ? "active" : "")" asp-area="" asp-page="/Accounting/Entries">
