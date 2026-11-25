@@ -1,0 +1,44 @@
+@page
+@{
+    ViewData["Title"] = "فروش و خرید";
+}
+<div class="business-page" dir="rtl">
+    <section class="hero"><div><span class="eyebrow">عملیات بازرگانی</span><h1>فاکتورهای فروش و خرید</h1><p>ثبت فاکتور، محاسبه ردیف‌ها و مالیات، و ایجاد سند حسابداری از فاکتور تأییدشده.</p></div></section>
+    <section class="panel">
+        <div class="form-grid">
+            <label>نوع فاکتور<select id="kind"><option value="Sales">فروش</option><option value="Purchase">خرید</option></select></label>
+            <label>شماره فاکتور<input id="number" maxlength="40" required placeholder="مثلاً S-1001"></label>
+            <label>تاریخ<input id="invoiceDate" type="date" required></label>
+            <label>مشتری / تأمین‌کننده<select id="party" required><option value="">در حال بارگذاری...</option></select></label>
+        </div>
+        <label class="notes-label">توضیحات<input id="notes" maxlength="500" placeholder="توضیحات اختیاری"></label>
+        <div class="table-scroll"><table><thead><tr><th>شرح کالا یا خدمت</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>مالیات ٪</th><th>مبلغ کل</th><th></th></tr></thead><tbody id="lines"></tbody></table></div>
+        <div class="actions"><button type="button" id="addLine" class="secondary">افزودن ردیف</button><button type="button" id="saveDraft">ذخیره پیش‌نویس</button></div>
+        <div class="totals"><div><span>جمع جزء</span><strong id="subtotal">۰</strong></div><div><span>مالیات</span><strong id="tax">۰</strong></div><div><span>مبلغ نهایی</span><strong id="total">۰</strong></div></div>
+        <p id="message" role="status" aria-live="polite"></p>
+    </section>
+    <section class="panel"><div class="list-head"><h2>فاکتورهای ثبت‌شده</h2><button type="button" class="secondary" id="refresh">بازخوانی</button></div><div class="table-scroll"><table><thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="invoiceRows"><tr><td colspan="7">در حال دریافت...</td></tr></tbody></table></div></section>
+</div>
+<style>
+.business-page{max-width:1400px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.hero{padding:24px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.hero h1{font-size:25px;margin:9px 0}.hero p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.panel{padding:20px;margin-bottom:18px;background:#fff;border:1px solid #e2eaf4;border-radius:15px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.form-grid label,.notes-label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#52667e;font-weight:700}.business-page input,.business-page select{min-width:0;padding:10px;border:1px solid #d9e3ef;border-radius:8px;background:#fff;font:inherit;font-size:12px}.notes-label{margin-top:14px}.table-scroll{overflow:auto;margin-top:16px}table{width:100%;border-collapse:collapse;min-width:780px}th,td{padding:11px 9px;text-align:right;border-bottom:1px solid #edf1f6;font-size:12px}th{background:#f7faff;color:#64768b}td input{width:100%;box-sizing:border-box}.actions,.list-head{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:14px}.business-page button{border:0;border-radius:8px;padding:10px 15px;background:#2677c9;color:white;font:inherit;font-size:12px;cursor:pointer}.business-page button.secondary{background:#edf5ff;color:#2465a5}.totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}.totals div{padding:13px;border:1px solid #e5edf6;border-radius:10px;background:#f8fbff}.totals span,.totals strong{display:block}.totals span{font-size:11px;color:#8292a6}.totals strong{margin-top:8px;font-size:16px}.list-head h2{font-size:16px;margin:0}#message{white-space:pre-wrap;font-size:12px;line-height:1.8}@@media(max-width:750px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:13px}.hero{padding:20px}.totals{gap:6px}.totals div{padding:9px}}
+</style>
+<script>
+(() => {
+ const $=id=>document.getElementById(id), money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+ const today=new Date(); $('invoiceDate').value=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+ function addLine(line={description:'',quantity:1,unitPrice:0,taxRate:0}) {
+   const tr=document.createElement('tr');
+   const fields=[['description','text',line.description,200],['quantity','number',line.quantity,''],['unitPrice','number',line.unitPrice,''],['taxRate','number',line.taxRate,'']];
+   for(const [key,type,value,max] of fields){const td=document.createElement('td'),input=document.createElement('input');input.dataset.field=key;input.type=type;input.value=value;input.required=key==='description';if(type==='number'){input.min='0';input.step=key==='quantity'?'0.001':'0.01';}if(max)input.maxLength=max;input.addEventListener('input',calculate);td.append(input);tr.append(td);}
+   const amount=document.createElement('td');amount.className='line-total';amount.textContent='۰';tr.append(amount);
+   const action=document.createElement('td'),remove=document.createElement('button');remove.type='button';remove.className='secondary';remove.textContent='حذف';remove.addEventListener('click',()=>{tr.remove();calculate();});action.append(remove);tr.append(action);$('lines').append(tr);calculate();
+ }
+ function calculate(){let subtotal=0,tax=0;for(const tr of $('lines').rows){const get=k=>tr.querySelector('[data-field="'+k+'"]').value;const base=Math.max(0,Number(get('quantity'))||0)*Math.max(0,Number(get('unitPrice'))||0);const t=base*Math.max(0,Number(get('taxRate'))||0)/100;subtotal+=base;tax+=t;tr.querySelector('.line-total').textContent=money(base+t);} $('subtotal').textContent=money(subtotal)+' ریال';$('tax').textContent=money(tax)+' ریال';$('total').textContent=money(subtotal+tax)+' ریال';}
+ async function loadParties(){const r=await fetch('/api/accounting/parties'),data=await r.json();if(!r.ok)throw Error(data.message||'بارگذاری اشخاص ناموفق بود');$('party').replaceChildren(new Option('انتخاب طرف حساب',''));for(const p of data.filter(x=>x.isActive))$('party').add(new Option(p.name,p.id));}
+ async function loadInvoices(){const r=await fetch('/api/accounting/invoices'),data=await r.json();if(!r.ok)throw Error(data.message||'بارگذاری فاکتورها ناموفق بود');const body=$('invoiceRows');body.replaceChildren();for(const x of data){const tr=document.createElement('tr');for(const v of [x.number,x.kind==='Sales'?'فروش':'خرید',new Date(x.invoiceDate).toLocaleDateString('fa-IR'),x.partyName,money(x.total)+' ریال',x.status==='Posted'?'ثبت نهایی':'پیش‌نویس']){const td=document.createElement('td');td.textContent=v;tr.append(td);}const td=document.createElement('td');if(x.status==='Draft'){const b=document.createElement('button');b.textContent='ثبت نهایی و صدور سند';b.addEventListener('click',()=>postInvoice(x.id));td.append(b);}tr.append(td);body.append(tr);}if(!data.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='هنوز فاکتوری ثبت نشده است.';tr.append(td);body.append(tr);}}
+ async function postInvoice(id){if(!confirm('فاکتور ثبت نهایی شود و سند حسابداری مرتبط ایجاد شود؟'))return;try{const r=await fetch('/api/accounting/invoices/'+id+'/post',{method:'POST'}),d=await r.json();if(!r.ok)throw Error(d.message||'ثبت نهایی ناموفق بود');$('message').textContent=d.message||'فاکتور و سند حسابداری ثبت شدند.';await loadInvoices();}catch(e){$('message').textContent=e.message;}}
+ $('addLine').addEventListener('click',()=>addLine());$('refresh').addEventListener('click',()=>loadInvoices().catch(e=>$('message').textContent=e.message));
+ $('saveDraft').addEventListener('click',async()=>{try{const lines=[...$('lines').rows].map(tr=>Object.fromEntries([...tr.querySelectorAll('[data-field]')].map(i=>[i.dataset.field,i.type==='number'?Number(i.value):i.value.trim()])));if(!lines.length||lines.some(x=>!x.description||x.quantity<=0||x.unitPrice<0||x.taxRate<0))throw Error('حداقل یک ردیف معتبر وارد کنید؛ تعداد باید مثبت باشد.');const payload={kind:$('kind').value,number:$('number').value.trim(),invoiceDate:$('invoiceDate').value,partyId:Number($('party').value),notes:$('notes').value.trim(),lines};const r=await fetch('/api/accounting/invoices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw Error(d.message||'ذخیره فاکتور ناموفق بود');$('message').textContent='پیش‌نویس فاکتور ذخیره شد.';$('number').value='';$('notes').value='';$('lines').replaceChildren();addLine();await loadInvoices();}catch(e){$('message').textContent=e.message;}});
+ addLine();loadParties().then(loadInvoices).catch(e=>$('message').textContent=e.message);
+})();
+</script>
