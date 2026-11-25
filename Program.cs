@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GhoghnoosAcc.Data;
 using GhoghnoosAcc.Models;
 using GhoghnoosAcc.Services;
@@ -120,6 +121,158 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
+
+// Platform-admin provisioning endpoints. These APIs are separate from tenant-scoped
+// accounting APIs; selecting a tenant issues a server-side cookie claim only after
+// validating that the tenant exists and is active.
+var platformAdminApi = app.MapGroup("/api/platform-admin")
+    .RequireAuthorization("PlatformAdmin");
+
+platformAdminApi.MapGet("/companies", async (AppDbContext db) =>
+{
+    var rows = await db.Tenants.AsNoTracking()
+        .OrderBy(x => x.Name)
+        .Select(x => new
+        {
+            x.Id, x.Name, x.Status, x.CreatedAtUtc,
+            MemberCount = x.Memberships.Count(m => m.IsActive)
+        })
+        .ToListAsync();
+    return Results.Ok(rows);
+});
+
+platformAdminApi.MapPost("/companies", async (PlatformAdminCreateTenantRequest request, AppDbContext db) =>
+{
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 160)
+        return Results.BadRequest(new { message = "نام شرکت الزامی است و حداکثر ۱۶۰ نویسه می‌تواند باشد." });
+    if (await db.Tenants.AnyAsync(x => x.Name.ToLower() == name.ToLower()))
+        return Results.Conflict(new { message = "شرکتی با این نام قبلاً ثبت شده است." });
+
+    var tenant = new Tenant { Name = name, Status = TenantStatuses.Active, CreatedAtUtc = DateTime.UtcNow };
+    db.Tenants.Add(tenant);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/platform-admin/companies/{tenant.Id}", new
+    {
+        tenant.Id, tenant.Name, tenant.Status, tenant.CreatedAtUtc, MemberCount = 0
+    });
+});
+
+platformAdminApi.MapPost("/companies/{tenantId:guid}/select", async (
+    Guid tenantId, ClaimsPrincipal principal, AppDbContext db,
+    UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager) =>
+{
+    var tenant = await db.Tenants.AsNoTracking()
+        .FirstOrDefaultAsync(x => x.Id == tenantId && x.Status == TenantStatuses.Active);
+    if (tenant is null)
+        return Results.NotFound(new { message = "شرکت فعال پیدا نشد." });
+
+    var user = await userManager.GetUserAsync(principal);
+    if (user is null)
+        return Results.Unauthorized();
+
+    await signInManager.SignInWithClaimsAsync(user, isPersistent: false, additionalClaims:
+    [
+        new Claim(TenantContext.TenantIdClaimType, tenant.Id.ToString()),
+        new Claim(TenantRoleAuthorization.RoleClaimType, TenantRoles.Owner)
+    ]);
+    return Results.Ok(new { message = "شرکت فعال انتخاب شد.", tenant.Id, tenant.Name });
+});
+
+platformAdminApi.MapGet("/companies/{tenantId:guid}/users", async (Guid tenantId, AppDbContext db) =>
+{
+    var tenantExists = await db.Tenants.AsNoTracking().AnyAsync(x => x.Id == tenantId);
+    if (!tenantExists) return Results.NotFound(new { message = "شرکت پیدا نشد." });
+    var rows = await db.TenantMemberships.AsNoTracking()
+        .Where(x => x.TenantId == tenantId)
+        .OrderBy(x => x.User!.Email)
+        .Select(x => new
+        {
+            x.Id, x.UserId, Email = x.User!.Email, UserName = x.User.UserName,
+            x.Role, x.IsActive, x.CreatedAtUtc
+        })
+        .ToListAsync();
+    return Results.Ok(rows);
+});
+
+platformAdminApi.MapPost("/companies/{tenantId:guid}/users", async (
+    Guid tenantId, PlatformAdminCreateUserRequest request, AppDbContext db,
+    UserManager<ApplicationUser> userManager) =>
+{
+    var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId && x.Status == TenantStatuses.Active);
+    if (tenant is null) return Results.NotFound(new { message = "شرکت فعال پیدا نشد." });
+
+    var email = request.Email?.Trim();
+    var role = request.Role?.Trim();
+    if (string.IsNullOrWhiteSpace(email) || email.Length > 256 ||
+        !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email))
+        return Results.BadRequest(new { message = "ایمیل معتبر وارد کنید." });
+    if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+        return Results.BadRequest(new { message = "رمز عبور اولیه باید حداقل ۸ نویسه باشد." });
+    var allowedRoles = new[] { TenantRoles.Owner, TenantRoles.Admin, TenantRoles.Accountant, TenantRoles.Sales, TenantRoles.Service, TenantRoles.ReadOnly };
+    if (role is null || !allowedRoles.Contains(role, StringComparer.Ordinal))
+        return Results.BadRequest(new { message = "نقش انتخاب‌شده معتبر نیست." });
+
+    var existingUser = await userManager.FindByEmailAsync(email);
+    if (existingUser is not null &&
+        await db.TenantMemberships.AnyAsync(x => x.UserId == existingUser.Id && x.TenantId == tenantId))
+        return Results.Conflict(new { message = "این کاربر از قبل عضو همین شرکت است." });
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
+    ApplicationUser user;
+    if (existingUser is null)
+    {
+        user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = false };
+        var createResult = await userManager.CreateAsync(user, request.Password!);
+        if (!createResult.Succeeded)
+        {
+            await transaction.RollbackAsync();
+            return Results.BadRequest(new
+            {
+                message = "حساب کاربری ساخته نشد؛ رمز عبور یا ایمیل را بررسی کنید.",
+                errors = createResult.Errors.Select(e => e.Description)
+            });
+        }
+    }
+    else
+    {
+        user = existingUser;
+    }
+
+    db.TenantMemberships.Add(new TenantMembership
+    {
+        UserId = user.Id, TenantId = tenantId, Role = role, IsActive = true, CreatedAtUtc = DateTime.UtcNow
+    });
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    return Results.Ok(new { message = "کاربر به شرکت اختصاص یافت.", userId = user.Id, email = user.Email, role });
+});
+
+platformAdminApi.MapPost("/companies/{tenantId:guid}/users/{membershipId:long}/toggle-active", async (
+    Guid tenantId, long membershipId, AppDbContext db) =>
+{
+    var membership = await db.TenantMemberships
+        .FirstOrDefaultAsync(x => x.Id == membershipId && x.TenantId == tenantId);
+    if (membership is null) return Results.NotFound(new { message = "عضویت پیدا نشد." });
+    membership.IsActive = !membership.IsActive;
+    await db.SaveChangesAsync();
+    return Results.Ok(new
+    {
+        membership.Id, membership.IsActive,
+        message = membership.IsActive ? "عضویت فعال شد." : "عضویت غیرفعال شد."
+    });
+});
+
+platformAdminApi.MapPost("/companies/{tenantId:guid}/toggle-status", async (Guid tenantId, AppDbContext db) =>
+{
+    var tenant = await db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId);
+    if (tenant is null) return Results.NotFound(new { message = "شرکت پیدا نشد." });
+    tenant.Status = tenant.Status == TenantStatuses.Active ? TenantStatuses.Suspended : TenantStatuses.Active;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { tenant.Id, tenant.Status, message = tenant.Status == TenantStatuses.Active ? "شرکت فعال شد." : "شرکت غیرفعال شد." });
+});
+
 
 app.MapGet("/api/accounting/status", () => Results.Ok(new
 {
@@ -1093,3 +1246,7 @@ app.Run();
 
 public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
 public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
+
+
+public sealed record PlatformAdminCreateTenantRequest(string? Name);
+public sealed record PlatformAdminCreateUserRequest(string? Email, string? Password, string? Role);
