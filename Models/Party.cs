@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace GhoghnoosAcc.Models;
 
-public class Party
+public class Party : ITenantOwned
 {
     public int Id { get; set; }
 
