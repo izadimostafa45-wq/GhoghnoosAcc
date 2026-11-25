@@ -473,4 +473,57 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
     });
 });
 
+
+accountingApi.MapPost("/entries/{id:int}/post", async Task<IResult> (
+    int id,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var entry = await db.JournalEntries
+        .ForTenant(tenantId)
+        .Include(x => x.Lines)
+        .FirstOrDefaultAsync(x => x.Id == id);
+
+    if (entry is null)
+        return Results.NotFound(new { message = "سند پیدا نشد." });
+    if (entry.IsPosted)
+        return Results.Conflict(new { message = "این سند قبلاً ثبت نهایی شده است." });
+    if (entry.Lines.Count < 2)
+        return Results.BadRequest(new { message = "سند باید حداقل دو ردیف داشته باشد." });
+
+    var debitTotal = entry.Lines.Sum(line => line.Debit);
+    var creditTotal = entry.Lines.Sum(line => line.Credit);
+    if (entry.Lines.Any(line => line.Debit < 0 || line.Credit < 0
+            || (line.Debit > 0 && line.Credit > 0)
+            || (line.Debit == 0 && line.Credit == 0)))
+        return Results.BadRequest(new { message = "هر ردیف باید مبلغ مثبت را فقط در یکی از ستون‌های بدهکار یا بستانکار داشته باشد." });
+    if (debitTotal <= 0 || Math.Abs(debitTotal - creditTotal) > 0.005m)
+        return Results.BadRequest(new
+        {
+            message = "سند متوازن نیست و امکان ثبت نهایی ندارد.",
+            debitTotal,
+            creditTotal,
+            difference = debitTotal - creditTotal
+        });
+
+    entry.IsPosted = true;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        message = "سند با موفقیت ثبت نهایی شد.",
+        entry.Id,
+        entry.DocumentNumber,
+        entry.IsPosted,
+        debitTotal,
+        creditTotal
+    });
+}).RequireAuthorization("TenantWrite");
+
 app.Run();
