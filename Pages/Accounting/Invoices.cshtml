@@ -25,6 +25,9 @@
 <script>
 (() => {
  const $=id=>document.getElementById(id), money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2}); let accounts=[],editingInvoiceId=null;
+ const requestedKind=new URLSearchParams(window.location.search).get('kind');
+ if(requestedKind==='Sales'||requestedKind==='Purchase') { $('kind').value=requestedKind; $('kind').disabled=true; }
+ $('kind').addEventListener('change',()=>{ $('kind').disabled=false; });
  const today=new Date(); $('invoiceDate').value=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
  function addLine(line={description:'',quantity:1,unitPrice:0,taxRate:0}) {
    const tr=document.createElement('tr');
