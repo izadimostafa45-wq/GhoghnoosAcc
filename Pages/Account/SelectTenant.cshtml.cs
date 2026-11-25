@@ -60,12 +60,13 @@ public sealed class SelectTenantModel(
                 && m.TenantId == TenantId
                 && m.IsActive
                 && m.Tenant != null
-                && m.Tenant.Status == TenantStatuses.Active)
+                && m.Tenant.Status == TenantStatuses.Active
+                && TenantRoleAuthorization.ReadRoles.Contains(m.Role))
             .Select(m => new { m.TenantId, m.Role })
             .SingleOrDefaultAsync();
 
         // Never trust the posted tenant ID: it must match an active membership.
-        if (membership is null || string.IsNullOrWhiteSpace(membership.Role))
+        if (membership is null || !TenantRoleAuthorization.IsKnownRole(membership.Role))
         {
             ModelState.AddModelError(string.Empty, "شرکت انتخاب‌شده معتبر نیست یا دسترسی فعال ندارید.");
             await LoadTenantsAsync();
@@ -95,7 +96,8 @@ public sealed class SelectTenantModel(
             .Where(m => m.UserId == user.Id
                 && m.IsActive
                 && m.Tenant != null
-                && m.Tenant.Status == TenantStatuses.Active)
+                && m.Tenant.Status == TenantStatuses.Active
+                && TenantRoleAuthorization.ReadRoles.Contains(m.Role))
             .OrderBy(m => m.Tenant!.Name)
             .Select(m => new TenantOption
             {
