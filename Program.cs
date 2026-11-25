@@ -271,6 +271,21 @@ accountingApi.MapPost("/entries", async Task<IResult> (
             missingAccounts = missing
         });
 
+    var partyNames = request.Lines!
+        .Where(line => !string.IsNullOrWhiteSpace(line!.PartyName))
+        .Select(line => line!.PartyName!.Trim())
+        .Distinct()
+        .ToList();
+    var parties = partyNames.Count == 0
+        ? new List<Party>()
+        : await db.Parties.ForTenant(tenantId)
+            .Where(x => x.IsActive && partyNames.Contains(x.Name))
+            .ToListAsync();
+    var partyMap = parties.ToDictionary(x => x.Name, x => x, StringComparer.OrdinalIgnoreCase);
+    var missingParties = partyNames.Where(name => !partyMap.ContainsKey(name)).ToList();
+    if (missingParties.Count > 0)
+        return Results.BadRequest(new { message = "شخص انتخاب‌شده وجود ندارد یا غیرفعال است.", missingParties });
+
     var entry = new JournalEntry
     {
         TenantId = tenantId,
@@ -284,6 +299,7 @@ accountingApi.MapPost("/entries", async Task<IResult> (
         {
             TenantId = tenantId,
             AccountId = accountMap[line!.AccountName!.Trim()].Id,
+            PartyId = string.IsNullOrWhiteSpace(line.PartyName) ? null : partyMap[line.PartyName.Trim()].Id,
             Debit = line.Debit,
             Credit = line.Credit
         }).ToList()
@@ -320,7 +336,8 @@ accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceP
             Lines = x.Lines.Select(line => new
             {
                 line.Id, line.AccountId, AccountCode = line.Account.Code,
-                AccountTitle = line.Account.Title, line.Debit, line.Credit, line.Description
+                AccountTitle = line.Account.Title, PartyName = line.Party == null ? null : line.Party.Name,
+                line.PartyId, line.Debit, line.Credit, line.Description
             })
         })
         .FirstOrDefaultAsync();
