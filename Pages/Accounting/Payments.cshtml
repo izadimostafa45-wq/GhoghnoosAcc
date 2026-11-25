@@ -1,0 +1,37 @@
+@page
+@{
+    ViewData["Title"] = "دریافت و پرداخت";
+}
+<div class="business-page" dir="rtl">
+ <section class="hero"><div><span class="eyebrow">خزانه‌داری</span><h1>دریافت و پرداخت</h1><p>ثبت دریافت از مشتری یا پرداخت به تأمین‌کننده، اتصال اختیاری به فاکتور و صدور سند حسابداری متناظر.</p></div></section>
+ <section class="panel">
+  <div class="form-grid">
+   <label>نوع عملیات<select id="kind"><option value="Receipt">دریافت از مشتری</option><option value="Payment">پرداخت به تأمین‌کننده</option></select></label>
+   <label>شماره رسید / پرداخت<input id="number" required maxlength="40" placeholder="مثلاً R-1001"></label>
+   <label>تاریخ<input id="date" type="date" required></label>
+   <label>طرف حساب<select id="party" required><option value="">انتخاب طرف حساب</option></select></label>
+   <label>حساب صندوق / بانک<select id="cashAccount" required><option value="">انتخاب حساب</option></select></label>
+   <label>فاکتور مرتبط (اختیاری)<select id="invoice"><option value="">بدون اتصال به فاکتور</option></select></label>
+   <label>مبلغ (ریال)<input id="amount" type="number" min="0.01" step="0.01" required></label>
+   <label>شرح<input id="notes" maxlength="500" placeholder="شرح اختیاری"></label>
+  </div>
+  <div class="actions"><button id="save" type="button">ثبت دریافت / پرداخت و صدور سند</button></div><p id="message" role="status" aria-live="polite"></p>
+ </section>
+ <section class="panel"><div class="list-head"><h2>سوابق دریافت و پرداخت</h2><button type="button" class="secondary" id="refresh">بازخوانی</button></div><div class="table-scroll"><table><thead><tr><th>شماره</th><th>نوع</th><th>تاریخ</th><th>طرف حساب</th><th>حساب صندوق/بانک</th><th>فاکتور</th><th>مبلغ</th><th>سند</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</div>
+<style>
+.business-page{max-width:1400px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.hero{padding:24px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.hero h1{font-size:25px;margin:9px 0}.hero p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.panel{padding:20px;margin-bottom:18px;background:#fff;border:1px solid #e2eaf4;border-radius:15px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.form-grid label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#52667e;font-weight:700}.business-page input,.business-page select{min-width:0;padding:10px;border:1px solid #d9e3ef;border-radius:8px;background:#fff;font:inherit;font-size:12px}.actions,.list-head{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:14px}.business-page button{border:0;border-radius:8px;padding:10px 15px;background:#2677c9;color:white;font:inherit;font-size:12px;cursor:pointer}.business-page button.secondary{background:#edf5ff;color:#2465a5}.table-scroll{overflow:auto;margin-top:16px}table{width:100%;border-collapse:collapse;min-width:800px}th,td{padding:11px 9px;text-align:right;border-bottom:1px solid #edf1f6;font-size:12px}th{background:#f7faff;color:#64768b}#message{white-space:pre-wrap;font-size:12px;line-height:1.8}@@media(max-width:750px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:13px}.hero{padding:20px}}
+</style>
+<script>
+(() => {
+ const $=id=>document.getElementById(id), money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+ const d=new Date();$('date').value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+ async function getJson(url){const r=await fetch(url),x=await r.json();if(!r.ok)throw Error(x.message||'بارگذاری اطلاعات ناموفق بود');return x;}
+ async function loadOptions(){const [parties,accounts,invoices]=await Promise.all([getJson('/api/accounting/parties'),getJson('/api/accounting/accounts'),getJson('/api/accounting/invoices')]);$('party').replaceChildren(new Option('انتخاب طرف حساب',''));for(const p of parties.filter(x=>x.isActive))$('party').add(new Option(p.name,p.id));$('cashAccount').replaceChildren(new Option('انتخاب حساب',''));for(const a of accounts.filter(x=>x.isActive&&x.type==='Asset'))$('cashAccount').add(new Option(a.code+' - '+a.title,a.id));$('invoice').replaceChildren(new Option('بدون اتصال به فاکتور',''));for(const i of invoices.filter(x=>x.status==='Posted'))$('invoice').add(new Option(i.number+' - '+i.partyName+' - '+money(i.total),i.id));}
+ async function loadRows(){const data=await getJson('/api/accounting/payments'),body=$('rows');body.replaceChildren();for(const x of data){const tr=document.createElement('tr');for(const v of [x.number,x.kind==='Receipt'?'دریافت':'پرداخت',new Date(x.paymentDate).toLocaleDateString('fa-IR'),x.partyName,x.cashAccountTitle,x.invoiceNumber||'—',money(x.amount)+' ریال',x.journalEntryNumber||'—']){const td=document.createElement('td');td.textContent=v;tr.append(td);}body.append(tr);}if(!data.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.textContent='هنوز عملیات مالی ثبت نشده است.';tr.append(td);body.append(tr);}}
+ $('kind').addEventListener('change',()=>{const label=$('kind').value==='Receipt'?'دریافت از مشتری':'پرداخت به تأمین‌کننده';$('save').textContent='ثبت '+label+' و صدور سند';});
+ $('refresh').addEventListener('click',()=>loadRows().catch(e=>$('message').textContent=e.message));
+ $('save').addEventListener('click',async()=>{try{const payload={kind:$('kind').value,number:$('number').value.trim(),paymentDate:$('date').value,partyId:Number($('party').value),cashAccountId:Number($('cashAccount').value),invoiceId:$('invoice').value?Number($('invoice').value):null,amount:Number($('amount').value),notes:$('notes').value.trim()};if(!payload.number||!payload.partyId||!payload.cashAccountId||payload.amount<=0)throw Error('شماره، طرف حساب، حساب صندوق/بانک و مبلغ مثبت الزامی است.');const r=await fetch('/api/accounting/payments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),data=await r.json();if(!r.ok)throw Error(data.message||'ثبت عملیات ناموفق بود');$('message').textContent=data.message||'عملیات و سند حسابداری ثبت شدند.';$('number').value='';$('amount').value='';$('notes').value='';await Promise.all([loadRows(),loadOptions()]);}catch(e){$('message').textContent=e.message;}});
+ loadOptions().then(loadRows).catch(e=>$('message').textContent=e.message);
+})();
+</script>
