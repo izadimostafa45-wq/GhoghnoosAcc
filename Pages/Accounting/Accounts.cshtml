@@ -21,7 +21,7 @@
     <p id="message" role="status" style="white-space:pre-wrap"></p>
     <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse">
-            <thead><tr><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">کد</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">عنوان</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">نوع</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">وضعیت</th></tr></thead>
+            <thead><tr><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">کد</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">عنوان</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">نوع</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">وضعیت</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">عملیات</th></tr></thead>
             <tbody id="accounts"></tbody>
         </table>
     </div>
@@ -45,7 +45,28 @@
                 cell.style.borderBottom = '1px solid #eee';
                 row.appendChild(cell);
             }
-            body.appendChild(row);
+            const actions = document.createElement('td'); actions.style.padding = '10px'; actions.style.borderBottom = '1px solid #eee';
+            const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'ویرایش'; edit.style.marginInlineEnd = '6px';
+            edit.addEventListener('click', async () => {
+                const code = prompt('کد حساب', account.code); if (code === null) return;
+                const title = prompt('عنوان حساب', account.title); if (title === null) return;
+                const type = prompt('نوع حساب (General, Asset, Liability, Equity, Revenue, Expense)', account.type); if (type === null) return;
+                try {
+                    const response = await fetch('/api/accounting/accounts/' + account.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,title,type})});
+                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'ویرایش ناموفق بود.');
+                    message.textContent = 'اطلاعات حساب به‌روزرسانی شد.'; await loadAccounts();
+                } catch (error) { message.textContent = error.message; }
+            });
+            const toggle = document.createElement('button'); toggle.type = 'button'; toggle.textContent = account.isActive ? 'غیرفعال‌کردن' : 'فعال‌کردن';
+            toggle.addEventListener('click', async () => {
+                if (!confirm('وضعیت این حساب تغییر کند؟')) return;
+                try {
+                    const response = await fetch('/api/accounting/accounts/' + account.id + '/toggle-active', {method:'POST'});
+                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'تغییر وضعیت ناموفق بود.');
+                    message.textContent = result.message || 'وضعیت تغییر کرد.'; await loadAccounts();
+                } catch (error) { message.textContent = error.message; }
+            });
+            actions.append(edit, toggle); row.appendChild(actions); body.appendChild(row);
         }
     }
     form.addEventListener('submit', async event => {
