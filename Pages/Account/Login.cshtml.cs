@@ -1,14 +1,21 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using GhoghnoosAcc.Data;
+using GhoghnoosAcc.Models;
+using GhoghnoosAcc.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using GhoghnoosAcc.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace GhoghnoosAcc.Pages.Account;
 
 [AllowAnonymous]
-public sealed class LoginModel(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) : PageModel
+public sealed class LoginModel(
+    SignInManager<ApplicationUser> signInManager,
+    UserManager<ApplicationUser> userManager,
+    AppDbContext db) : PageModel
 {
     [BindProperty]
     public LoginInput Input { get; set; } = new();
@@ -41,10 +48,45 @@ public sealed class LoginModel(SignInManager<ApplicationUser> signInManager, Use
         var user = await userManager.FindByEmailAsync(Input.Email.Trim());
         var result = user is null
             ? Microsoft.AspNetCore.Identity.SignInResult.Failed
-            : await signInManager.PasswordSignInAsync(user.UserName!, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+            : await signInManager.CheckPasswordSignInAsync(user, Input.Password, lockoutOnFailure: true);
 
-        if (result.Succeeded)
+        if (result.Succeeded && user is not null)
+        {
+            // Do not issue an authenticated cookie until a valid active workspace
+            // membership has been resolved from the database.
+            var memberships = await db.TenantMemberships
+                .AsNoTracking()
+                .Where(m => m.UserId == user.Id
+                    && m.IsActive
+                    && m.Tenant != null
+                    && m.Tenant.Status == TenantStatuses.Active)
+                .Select(m => new { m.TenantId, m.Role })
+                .Take(2)
+                .ToListAsync();
+
+            if (memberships.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty,
+                    "ورود انجام نشد؛ برای این حساب، عضویت فعال در هیچ شرکت ثبت نشده است.");
+                return Page();
+            }
+
+            if (memberships.Count > 1)
+            {
+                ModelState.AddModelError(string.Empty,
+                    "این حساب به چند شرکت فعال دسترسی دارد؛ تا زمان انتخاب امن شرکت، ورود به بخش حسابداری مسدود است.");
+                return Page();
+            }
+
+            var membership = memberships[0];
+            await signInManager.SignInWithClaimsAsync(user, Input.RememberMe, new[]
+            {
+                new Claim(TenantContext.TenantIdClaimType, membership.TenantId.ToString("D")),
+                new Claim("ghoghnoos:tenant_role", membership.Role)
+            });
+
             return LocalRedirect(ReturnUrl);
+        }
 
         if (result.IsLockedOut)
             ModelState.AddModelError(string.Empty, "به دلیل تلاش‌های ناموفق، حساب موقتاً قفل شده است.");
