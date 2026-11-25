@@ -76,14 +76,14 @@ public sealed class LoginModel(
                 // Establish only the identity first. The accounting API still rejects
                 // this cookie because it has no tenant claim until selection is validated.
                 await signInManager.SignInAsync(user, Input.RememberMe);
-                return RedirectToPage("/Account/SelectTenant", new { returnUrl = ReturnUrl });
+                return RedirectToPage("/Account/SelectTenant", new { returnUrl = ReturnUrl, rememberMe = Input.RememberMe });
             }
 
             var membership = memberships[0];
             await signInManager.SignInWithClaimsAsync(user, Input.RememberMe, new[]
             {
                 new Claim(TenantContext.TenantIdClaimType, membership.TenantId.ToString("D")),
-                new Claim("ghoghnoos:tenant_role", membership.Role)
+                new Claim(TenantRoleAuthorization.RoleClaimType, membership.Role)
             });
 
             return LocalRedirect(ReturnUrl);
