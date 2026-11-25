@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JournalEntryValidator>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<IAuthorizationHandler, TenantActiveAuthorizationHandler>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -53,15 +54,18 @@ builder.Services.AddAuthorization(options =>
         .RequireClaim(PlatformAdminAuthorization.ClaimType, "true"));
     options.AddPolicy("TenantRequired", policy => policy
         .RequireAuthenticatedUser()
-        .RequireAssertion(context => TenantRoleAuthorization.HasValidTenantAndRole(context.User)));
+        .RequireAssertion(context => TenantRoleAuthorization.HasValidTenantAndRole(context.User))
+        .AddRequirements(new TenantActiveRequirement()));
     options.AddPolicy("TenantRead", policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
-            context.User, TenantRoleAuthorization.ReadRoles)));
+            context.User, TenantRoleAuthorization.ReadRoles))
+        .AddRequirements(new TenantActiveRequirement()));
     options.AddPolicy("TenantWrite", policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
-            context.User, TenantRoleAuthorization.WriteRoles)));
+            context.User, TenantRoleAuthorization.WriteRoles))
+        .AddRequirements(new TenantActiveRequirement()));
 });
 builder.Services.AddRazorPages(options =>
 {
