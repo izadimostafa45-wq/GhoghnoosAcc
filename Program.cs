@@ -771,7 +771,7 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
     return Results.Created($"/api/accounting/invoices/{invoice.Id}", new { invoice.Id, invoice.Number, invoice.Kind, invoice.Status, invoice.Subtotal, invoice.TaxTotal, invoice.Total });
 }).RequireAuthorization("TenantWrite");
 
-accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, InvoicePostRequest request, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
@@ -780,18 +780,18 @@ accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, IS
     if (invoice is null) return Results.NotFound(new { message = "فاکتور پیدا نشد." });
     if (invoice.Status != InvoiceStatuses.Draft) return Results.Conflict(new { message = "فاکتور قبلاً ثبت نهایی شده است." });
     var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
-    Account? FindSingle(Func<Account,bool> predicate) { var found = accounts.Where(predicate).ToList(); return found.Count == 1 ? found[0] : null; }
-    Account? counterparty = invoice.Kind == InvoiceKinds.Sales
-        ? FindSingle(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران")))
-        : FindSingle(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران")));
-    Account? operating = invoice.Kind == InvoiceKinds.Sales ? FindSingle(a => a.Type == "Revenue") : FindSingle(a => a.Type == "Expense");
-    Account? taxAccount = invoice.TaxTotal == 0 ? null : invoice.Kind == InvoiceKinds.Sales
-        ? FindSingle(a => a.Type == "Liability" && a.Title.Contains("مالیات"))
-        : FindSingle(a => a.Type == "Asset" && (a.Title.Contains("مالیات خرید") || a.Title.Contains("ارزش افزوده خرید")));
-    if (counterparty is null || operating is null || (invoice.TaxTotal > 0 && taxAccount is null))
-        return Results.Conflict(new { message = "برای ثبت خودکار، حساب‌های فعال و بدون ابهام تعریف کنید: " +
-            (invoice.Kind == InvoiceKinds.Sales ? "یک حساب دارایی با عنوان دریافتنی/مشتری، یک حساب درآمد" : "یک حساب بدهی با عنوان پرداختنی/تأمین‌کننده، یک حساب هزینه") +
-            (invoice.TaxTotal > 0 ? " و حساب مالیات متناسب با نوع فاکتور." : ".") });
+    var counterpartyType = invoice.Kind == InvoiceKinds.Sales ? "Asset" : "Liability";
+    var operatingType = invoice.Kind == InvoiceKinds.Sales ? "Revenue" : "Expense";
+    var taxType = invoice.Kind == InvoiceKinds.Sales ? "Liability" : "Asset";
+    var counterparty = accounts.FirstOrDefault(a => a.Id == request.CounterpartyAccountId && a.Type == counterpartyType);
+    var operating = accounts.FirstOrDefault(a => a.Id == request.OperatingAccountId && a.Type == operatingType);
+    var taxAccount = request.TaxAccountId.HasValue
+        ? accounts.FirstOrDefault(a => a.Id == request.TaxAccountId.Value && a.Type == taxType)
+        : null;
+    if (counterparty is null || operating is null ||
+        (invoice.TaxTotal > 0 && taxAccount is null) ||
+        (invoice.TaxTotal == 0 && request.TaxAccountId.HasValue && taxAccount is null))
+        return Results.BadRequest(new { message = "حساب‌های انتخاب‌شده معتبر نیستند یا با نوع فاکتور سازگار نیستند. حساب دریافتنی/پرداختنی، درآمد/هزینه و در صورت نیاز مالیات را بررسی کنید." });
     var docNo = "INV-" + invoice.Number;
     if (await db.JournalEntries.ForTenant(tenantId).AnyAsync(x => x.DocumentNumber == docNo))
         return Results.Conflict(new { message = "شماره سند حسابداری مرتبط تکراری است؛ شماره فاکتور را بررسی کنید." });
