@@ -26,6 +26,12 @@ public sealed class Invoice : ITenantOwned
     public DateTime InvoiceDate { get; set; } = DateTime.UtcNow.Date;
     public int PartyId { get; set; }
     public Party Party { get; set; } = null!;
+    public int? CounterpartyAccountId { get; set; }
+    public Account? CounterpartyAccount { get; set; }
+    public int? OperatingAccountId { get; set; }
+    public Account? OperatingAccount { get; set; }
+    public int? TaxAccountId { get; set; }
+    public Account? TaxAccount { get; set; }
     public int? JournalEntryId { get; set; }
     public JournalEntry? JournalEntry { get; set; }
     [StringLength(500)] public string? Notes { get; set; }
