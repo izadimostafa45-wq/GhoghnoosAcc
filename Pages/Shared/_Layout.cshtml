@@ -21,6 +21,12 @@
                 <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")" asp-area="" asp-page="/Index">
                     <span class="nav-icon">▦</span><span>داشبورد</span>
                 </a>
+                @if (User.HasClaim("ghoghnoos:platform_admin", "true"))
+                {
+                    <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/PlatformAdmin" ? "active" : "")" asp-area="" asp-page="/PlatformAdmin">
+                        <span class="nav-icon">♙</span><span>مدیریت کل سامانه</span>
+                    </a>
+                }
                 <details class="nav-group" open>
                     <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
                     <div class="sub-nav">
