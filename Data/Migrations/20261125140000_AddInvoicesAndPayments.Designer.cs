@@ -9,7 +9,7 @@ namespace GhoghnoosAcc.Data.Migrations;
 
 [DbContext(typeof(AppDbContext))]
 [Migration("20261125140000_AddInvoicesAndPayments")]
-partial class AddInvoicesAndPayments
+public partial class AddInvoicesAndPayments
 {
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
     {
