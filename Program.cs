@@ -1320,9 +1320,10 @@ app.MapPost("/api/assistant/chat", async (AssistantChatRequest request, IConfigu
     if (string.IsNullOrWhiteSpace(apiKey))
         return Results.Problem("دستیار در رابط کاربری فعال است، اما کلید API آن هنوز در پیکربندی امن سرور ثبت نشده است.", statusCode: 503);
     var model = configuration["OpenAI:Model"] ?? "gpt-4.1-mini";
+    var baseUrl = (configuration["OpenAI:BaseUrl"] ?? "https://api.gapgpt.ir/v1").TrimEnd('/');
     using var client = new HttpClient();
     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-    using var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", new
+    using var response = await client.PostAsJsonAsync($"{baseUrl}/chat/completions", new
     {
         model,
         messages = new object[]
