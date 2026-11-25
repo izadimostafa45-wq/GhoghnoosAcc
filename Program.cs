@@ -456,6 +456,42 @@ accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
 });
 
 
+accountingApi.MapGet("/reports/balance-sheet", async Task<IResult> (
+    DateTime? asOf,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var cutoffExclusive = asOf.HasValue
+        ? DateTime.SpecifyKind(asOf.Value.Date.AddDays(1), DateTimeKind.Utc)
+        : DateTime.SpecifyKind(DateTime.MaxValue.Date, DateTimeKind.Utc);
+    var db = services.GetRequiredService<AppDbContext>();
+    var balances = await db.JournalEntryLines.AsNoTracking()
+        .ForTenant(tenantId)
+        .Where(line => line.TenantId == tenantId && line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.IsPosted && line.JournalEntry.DocumentDate < cutoffExclusive
+            && (line.Account.Type == "Asset" || line.Account.Type == "Liability" || line.Account.Type == "Equity"))
+        .GroupBy(line => new { line.AccountId, line.Account.Code, line.Account.Title, line.Account.Type })
+        .Select(group => new {
+            accountId = group.Key.AccountId, code = group.Key.Code, title = group.Key.Title, type = group.Key.Type,
+            debit = group.Sum(line => line.Debit), credit = group.Sum(line => line.Credit)
+        })
+        .OrderBy(row => row.type).ThenBy(row => row.code)
+        .ToListAsync();
+    var assets = balances.Where(x => x.type == "Asset").Sum(x => x.debit - x.credit);
+    var liabilities = balances.Where(x => x.type == "Liability").Sum(x => x.credit - x.debit);
+    var equity = balances.Where(x => x.type == "Equity").Sum(x => x.credit - x.debit);
+    return Results.Ok(new {
+        asOf = asOf?.Date, assetAccounts = balances.Where(x => x.type == "Asset"),
+        liabilityAccounts = balances.Where(x => x.type == "Liability"),
+        equityAccounts = balances.Where(x => x.type == "Equity"),
+        assetsTotal = assets, liabilitiesTotal = liabilities, equityTotal = equity,
+        liabilitiesAndEquityTotal = liabilities + equity,
+        difference = assets - liabilities - equity
+    });
+});
+
 accountingApi.MapGet("/reports/income-statement", async Task<IResult> (
     DateTime? from,
     DateTime? to,
