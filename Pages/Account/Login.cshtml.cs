@@ -73,9 +73,10 @@ public sealed class LoginModel(
 
             if (memberships.Count > 1)
             {
-                ModelState.AddModelError(string.Empty,
-                    "این حساب به چند شرکت فعال دسترسی دارد؛ تا زمان انتخاب امن شرکت، ورود به بخش حسابداری مسدود است.");
-                return Page();
+                // Establish only the identity first. The accounting API still rejects
+                // this cookie because it has no tenant claim until selection is validated.
+                await signInManager.SignInAsync(user, Input.RememberMe);
+                return RedirectToPage("/Account/SelectTenant", new { returnUrl = ReturnUrl });
             }
 
             var membership = memberships[0];
