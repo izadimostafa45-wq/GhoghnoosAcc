@@ -27,6 +27,7 @@
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">مدیریت حساب‌ها</a>
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Parties" ? "active" : "")" asp-area="" asp-page="/Accounting/Parties">مدیریت اشخاص</a>
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/TrialBalance" ? "active" : "")" asp-area="" asp-page="/Accounting/TrialBalance">تراز آزمایشی</a>
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/GeneralLedger" ? "active" : "")" asp-area="" asp-page="/Accounting/GeneralLedger">دفتر کل</a>
                     </div>
                 </details>
                 <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Entries" ? "active" : "")" asp-area="" asp-page="/Accounting/Entries">
