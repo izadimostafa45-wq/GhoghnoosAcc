@@ -293,4 +293,50 @@ accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceP
     return entry is null ? Results.NotFound() : Results.Ok(entry);
 });
 
+
+accountingApi.MapGet("/parties", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var parties = await db.Parties.AsNoTracking().ForTenant(tenantId)
+        .OrderBy(x => x.Name)
+        .Select(x => new { x.Id, x.Name, x.Phone, x.Address, x.IsActive })
+        .Take(1000)
+        .ToListAsync();
+    return Results.Ok(parties);
+});
+
+accountingApi.MapPost("/parties", async Task<IResult> (CreatePartyRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+        return Results.BadRequest(new { message = "نام شخص یا شرکت الزامی است." });
+    if (name.Length > 200 || (request.Phone?.Length ?? 0) > 30 || (request.Address?.Length ?? 0) > 300)
+        return Results.BadRequest(new { message = "طول یکی از فیلدها بیش از حد مجاز است." });
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var party = new Party
+    {
+        TenantId = tenantId,
+        Name = name,
+        Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+        Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow
+    };
+    db.Parties.Add(party);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/accounting/parties/{party.Id}",
+        new { party.Id, party.Name, party.Phone, party.Address, party.IsActive });
+}).RequireAuthorization("TenantWrite");
+
 app.Run();
