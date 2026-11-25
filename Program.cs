@@ -177,8 +177,8 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
     db.Accounts.Add(account);
     await db.SaveChangesAsync();
     return Results.Created($"/api/accounting/accounts/{account.Id}",
-        new { account.Id, account.Code, account.Title, account.Type, account.IsActive }).RequireAuthorization("TenantWrite");
-});
+        new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
+}).RequireAuthorization("TenantWrite");
 
 accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
@@ -264,8 +264,8 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     {
         entry.Id, entry.DocumentNumber, entry.DocumentDate, entry.Description,
         entry.IsPosted, validation.DebitTotal, validation.CreditTotal
-    }).RequireAuthorization("TenantWrite");
-});
+    });
+}).RequireAuthorization("TenantWrite");
 
 accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
 {
