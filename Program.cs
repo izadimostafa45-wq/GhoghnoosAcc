@@ -1334,7 +1334,6 @@ app.MapPost("/api/assistant/chat", async (AssistantChatRequest request, IConfigu
     });
     if (!response.IsSuccessStatusCode)
     {
-        var detail = await response.Content.ReadAsStringAsync();
         return Results.Problem("سرویس هوش مصنوعی پاسخ موفق نداد. تنظیمات مدل و کلید API را بررسی کنید.", statusCode: 502);
     }
     using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
