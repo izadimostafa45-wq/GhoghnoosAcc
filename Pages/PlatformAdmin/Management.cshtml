@@ -127,8 +127,8 @@
     async function selectCompany(company) {
         try {
             await request('/api/platform-admin/companies/' + company.id + '/select', { method: 'POST' });
-            showNotice('شرکت «' + company.name + '» انتخاب شد؛ صفحه مدیریت اشخاص باز می‌شود.');
-            window.location.assign('/Accounting/Parties');
+            showNotice('شرکت «' + company.name + '» انتخاب شد؛ در حال انتقال به داشبورد شرکت…');
+            window.location.assign('/Index');
         } catch (e) { showNotice(e.message, true); }
     }
 
