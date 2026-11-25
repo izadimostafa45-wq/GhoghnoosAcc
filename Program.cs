@@ -436,6 +436,67 @@ accountingApi.MapPost("/parties/{id:int}/toggle-active", async Task<IResult> (in
     return Results.Ok(new { party.Id, party.IsActive, message = party.IsActive ? "شخص فعال شد." : "شخص غیرفعال شد." });
 }).RequireAuthorization("TenantWrite");
 
+accountingApi.MapGet("/reports/party-balances", async Task<IResult> (
+    DateTime? from,
+    DateTime? to,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+    if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نباید بعد از تاریخ پایان باشد." });
+
+    var start = from.HasValue
+        ? DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc)
+        : DateTime.SpecifyKind(new DateTime(1900, 1, 1), DateTimeKind.Utc);
+    var endExclusive = to.HasValue
+        ? DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc)
+        : DateTime.SpecifyKind(DateTime.MaxValue.Date, DateTimeKind.Utc);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var balances = await db.JournalEntryLines.AsNoTracking()
+        .ForTenant(tenantId)
+        .Where(line => line.TenantId == tenantId
+            && line.PartyId.HasValue
+            && line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.IsPosted
+            && line.JournalEntry.DocumentDate >= start
+            && line.JournalEntry.DocumentDate < endExclusive)
+        .GroupBy(line => new { PartyId = line.PartyId!.Value, PartyName = line.Party!.Name })
+        .Select(group => new
+        {
+            partyId = group.Key.PartyId,
+            partyName = group.Key.PartyName,
+            debit = group.Sum(line => line.Debit),
+            credit = group.Sum(line => line.Credit),
+            documentLines = group.Count()
+        })
+        .OrderBy(row => row.partyName)
+        .ToListAsync();
+
+    return Results.Ok(new
+    {
+        from = from?.Date,
+        to = to?.Date,
+        parties = balances.Select(row => new
+        {
+            row.partyId,
+            row.partyName,
+            row.debit,
+            row.credit,
+            debitBalance = Math.Max(0m, row.debit - row.credit),
+            creditBalance = Math.Max(0m, row.credit - row.debit),
+            row.documentLines
+        }),
+        debitTotal = balances.Sum(row => row.debit),
+        creditTotal = balances.Sum(row => row.credit),
+        debitBalanceTotal = balances.Sum(row => Math.Max(0m, row.debit - row.credit)),
+        creditBalanceTotal = balances.Sum(row => Math.Max(0m, row.credit - row.debit))
+    });
+});
+
 accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
     DateTime? from,
     DateTime? to,
