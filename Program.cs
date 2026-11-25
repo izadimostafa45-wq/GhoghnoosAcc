@@ -853,6 +853,7 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     var invoice = request.InvoiceId.HasValue ? await db.Invoices.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == request.InvoiceId.Value && x.Status == InvoiceStatuses.Posted && x.PartyId == party.Id) : null;
     if (request.InvoiceId.HasValue && invoice is null) return Results.BadRequest(new { message = "فاکتور ثبت‌نهایی‌شده متعلق به این طرف حساب پیدا نشد." });
     if (invoice is null) return Results.BadRequest(new { message = "برای جلوگیری از ثبت نادرست حساب طرف مقابل، در این نسخه دریافت/پرداخت باید به فاکتور ثبت‌نهایی‌شده متصل باشد." });
+    await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
     var alreadyPaid = await db.PaymentTransactions.ForTenant(tenantId)
         .Where(x => x.InvoiceId == invoice.Id)
         .SumAsync(x => (decimal?)x.Amount) ?? 0m;
@@ -889,6 +890,7 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     db.PaymentTransactions.Add(payment);
     db.JournalEntries.Add(journal);
     await db.SaveChangesAsync();
+    await transaction.CommitAsync();
     return Results.Created($"/api/accounting/payments/{payment.Id}", new { message = "عملیات دریافت/پرداخت و سند " + journal.DocumentNumber + " ثبت شد.", payment.Id, journalEntryId = journal.Id });
 }).RequireAuthorization("TenantWrite");
 
