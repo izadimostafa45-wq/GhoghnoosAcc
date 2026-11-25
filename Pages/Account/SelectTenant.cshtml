@@ -11,6 +11,7 @@
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3" role="alert"></div>
             <form method="post">
                 <input asp-for="ReturnUrl" type="hidden" />
+                <input asp-for="RememberMe" type="hidden" />
                 <div class="mb-3">
                     <label asp-for="TenantId" class="form-label">شرکت</label>
                     <select asp-for="TenantId" class="form-select" required>
