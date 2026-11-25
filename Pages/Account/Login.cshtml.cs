@@ -15,7 +15,8 @@ namespace GhoghnoosAcc.Pages.Account;
 public sealed class LoginModel(
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
-    AppDbContext db) : PageModel
+    AppDbContext db,
+    IConfiguration configuration) : PageModel
 {
     [BindProperty]
     public LoginInput Input { get; set; } = new();
@@ -52,6 +53,23 @@ public sealed class LoginModel(
 
         if (result.Succeeded && user is not null)
         {
+            // The configured platform administrator is intentionally independent of
+            // company membership. The password is still verified by ASP.NET Identity.
+            var platformAdminEmail = configuration["PlatformAdmin:Email"]?.Trim();
+            if (string.IsNullOrWhiteSpace(platformAdminEmail))
+                platformAdminEmail = PlatformAdminAuthorization.DefaultEmail;
+
+            if (string.Equals(user.Email, platformAdminEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                await signInManager.SignInWithClaimsAsync(user, Input.RememberMe, new[]
+                {
+                    new Claim(PlatformAdminAuthorization.ClaimType, "true")
+                });
+
+                var adminUrl = Url.Page("/PlatformAdmin") ?? "/PlatformAdmin";
+                return LocalRedirect(ReturnUrl == "/" ? adminUrl : ReturnUrl);
+            }
+
             // Do not issue an authenticated cookie until a valid active workspace
             // membership has been resolved from the database.
             var memberships = await db.TenantMemberships
