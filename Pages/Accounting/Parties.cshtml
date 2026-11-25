@@ -22,7 +22,7 @@
         <section class="panel party-list">
             <div class="list-heading"><div><h2>فهرست اشخاص</h2><p id="partyCount">در حال بارگذاری…</p></div><button type="button" class="refresh-button" id="refreshParties">بازخوانی</button></div>
             <label class="search-box" for="partySearch"><span aria-hidden="true">⌕</span><input id="partySearch" type="search" placeholder="جست‌وجو در نام، تلفن یا نشانی" /></label>
-            <div class="table-scroll"><table><thead><tr><th>نام</th><th>شماره تماس</th><th>نشانی</th><th>وضعیت</th></tr></thead><tbody id="partyRows"><tr><td colspan="4">در حال دریافت اطلاعات…</td></tr></tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th>نام</th><th>شماره تماس</th><th>نشانی</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="partyRows"><tr><td colspan="4">در حال دریافت اطلاعات…</td></tr></tbody></table></div>
             <p id="emptyState" class="empty-state" hidden>موردی برای نمایش پیدا نشد.</p>
         </section>
     </section>
@@ -48,11 +48,33 @@
             }
             const status = document.createElement('td'), pill = document.createElement('span');
             pill.className = 'active-pill'; pill.textContent = party.isActive ? 'فعال' : 'غیرفعال';
-            status.appendChild(pill); tr.appendChild(status); rows.appendChild(tr);
+            status.appendChild(pill); tr.appendChild(status);
+            const actions = document.createElement('td');
+            const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'ویرایش'; edit.className = 'refresh-button';
+            edit.addEventListener('click', async () => {
+                const name = prompt('نام شخص یا شرکت', party.name); if (name === null) return;
+                const phone = prompt('شماره تماس', party.phone || ''); if (phone === null) return;
+                const address = prompt('نشانی', party.address || ''); if (address === null) return;
+                try {
+                    const response = await fetch('/api/accounting/parties/' + party.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,address})});
+                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'ویرایش ناموفق بود.');
+                    message.textContent = 'اطلاعات شخص به‌روزرسانی شد.'; await load();
+                } catch (error) { message.textContent = error.message || 'ویرایش ناموفق بود.'; }
+            });
+            const toggle = document.createElement('button'); toggle.type = 'button'; toggle.textContent = party.isActive ? 'غیرفعال‌کردن' : 'فعال‌کردن'; toggle.className = 'refresh-button'; toggle.style.marginInlineStart = '6px';
+            toggle.addEventListener('click', async () => {
+                if (!confirm('وضعیت این شخص تغییر کند؟')) return;
+                try {
+                    const response = await fetch('/api/accounting/parties/' + party.id + '/toggle-active', {method:'POST'});
+                    const result = await response.json(); if (!response.ok) throw new Error(result.message || result.detail || 'تغییر وضعیت ناموفق بود.');
+                    message.textContent = result.message || 'وضعیت تغییر کرد.'; await load();
+                } catch (error) { message.textContent = error.message || 'تغییر وضعیت ناموفق بود.'; }
+            });
+            actions.append(edit, toggle); tr.appendChild(actions); rows.appendChild(tr);
         }
         count.textContent = filtered.length.toLocaleString('fa-IR') + ' مورد';
         empty.hidden = filtered.length !== 0;
-        if (!filtered.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 4; td.textContent = ' '; tr.appendChild(td); rows.appendChild(tr); }
+        if (!filtered.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 5; td.textContent = ' '; tr.appendChild(td); rows.appendChild(tr); }
     }
     async function load() {
         count.textContent = 'در حال بارگذاری…';
