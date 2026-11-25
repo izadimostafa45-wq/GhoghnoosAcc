@@ -890,6 +890,81 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
     return Results.Created($"/api/accounting/invoices/{invoice.Id}", new { invoice.Id, invoice.Number, invoice.Kind, invoice.Status, invoice.Subtotal, invoice.TaxTotal, invoice.Total });
 }).RequireAuthorization("TenantWrite");
 
+
+accountingApi.MapGet("/invoices/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var invoice = await db.Invoices.AsNoTracking().ForTenant(tenantId)
+        .Include(x => x.Lines)
+        .Where(x => x.Id == id)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, x.Notes,
+            x.Subtotal, x.TaxTotal, x.Total,
+            Lines = x.Lines.OrderBy(line => line.Id).Select(line => new { line.Description, line.Quantity, line.UnitPrice, line.TaxRate }).ToList() })
+        .FirstOrDefaultAsync();
+    return invoice is null ? Results.NotFound(new { message = "فاکتور پیدا نشد." }) : Results.Ok(invoice);
+});
+
+accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var number = request.Number?.Trim();
+    if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
+    if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
+        x.Quantity <= 0 || x.UnitPrice < 0 || x.TaxRate < 0 || x.TaxRate > 100))
+        return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
+    var db = services.GetRequiredService<AppDbContext>();
+    var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
+    if (invoice is null) return Results.NotFound(new { message = "فاکتور پیدا نشد." });
+    if (invoice.Status != InvoiceStatuses.Draft || invoice.JournalEntryId.HasValue)
+        return Results.Conflict(new { message = "فقط پیش‌نویس فاکتور قابل ویرایش است." });
+    if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
+        return Results.BadRequest(new { message = "طرف حساب فعال پیدا نشد." });
+    if (await db.Invoices.ForTenant(tenantId).AnyAsync(x => x.Id != id && x.Number == number))
+        return Results.Conflict(new { message = "شماره فاکتور قبلاً استفاده شده است." });
+
+    invoice.Number = number;
+    invoice.Kind = request.Kind;
+    invoice.InvoiceDate = DateTime.SpecifyKind(request.InvoiceDate.Date, DateTimeKind.Utc);
+    invoice.PartyId = request.PartyId;
+    invoice.Notes = request.Notes?.Trim();
+    invoice.Lines.Clear();
+    foreach (var item in request.Lines)
+    {
+        var subtotal = decimal.Round(item.Quantity * item.UnitPrice, 2);
+        var tax = decimal.Round(subtotal * item.TaxRate / 100m, 2);
+        invoice.Lines.Add(new InvoiceLine { TenantId = tenantId, Description = item.Description.Trim(),
+            Quantity = item.Quantity, UnitPrice = item.UnitPrice, TaxRate = item.TaxRate,
+            LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax });
+    }
+    invoice.Subtotal = invoice.Lines.Sum(x => x.LineSubtotal);
+    invoice.TaxTotal = invoice.Lines.Sum(x => x.LineTax);
+    invoice.Total = invoice.Lines.Sum(x => x.LineTotal);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "پیش‌نویس فاکتور به‌روزرسانی شد.", invoice.Id, invoice.Number, invoice.Total });
+}).RequireAuthorization("TenantWrite");
+
+accountingApi.MapDelete("/invoices/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
+    if (invoice is null) return Results.NotFound(new { message = "فاکتور پیدا نشد." });
+    if (invoice.Status != InvoiceStatuses.Draft || invoice.JournalEntryId.HasValue)
+        return Results.Conflict(new { message = "فقط پیش‌نویس فاکتور قابل حذف است؛ فاکتور ثبت‌نهایی‌شده باید از مسیر اصلاح حسابداری رسیدگی شود." });
+    if (await db.PaymentTransactions.ForTenant(tenantId).AnyAsync(x => x.InvoiceId == id))
+        return Results.Conflict(new { message = "برای این فاکتور عملیات دریافت/پرداخت ثبت شده و حذف آن مجاز نیست." });
+    db.Invoices.Remove(invoice);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { message = "پیش‌نویس فاکتور حذف شد." });
+}).RequireAuthorization("TenantWrite");
+
 accountingApi.MapPost("/invoices/{id:int}/post", async Task<IResult> (int id, InvoicePostRequest request, IServiceProvider services, ITenantContext tenantContext) =>
 {
     if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
