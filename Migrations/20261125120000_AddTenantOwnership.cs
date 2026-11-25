@@ -84,6 +84,40 @@ public sealed class AddTenantOwnership : Migration
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Accounts_TenantId_Code" ON "Accounts" ("TenantId", "Code");
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_JournalEntries_TenantId_DocumentNumber"
                 ON "JournalEntries" ("TenantId", "DocumentNumber");
+
+            -- Composite unique keys are required as principals for tenant-aware foreign keys.
+            CREATE UNIQUE INDEX IF NOT EXISTS "AK_Accounts_TenantId_Id"
+                ON "Accounts" ("TenantId", "Id");
+            CREATE UNIQUE INDEX IF NOT EXISTS "AK_Parties_TenantId_Id"
+                ON "Parties" ("TenantId", "Id");
+            CREATE UNIQUE INDEX IF NOT EXISTS "AK_JournalEntries_TenantId_Id"
+                ON "JournalEntries" ("TenantId", "Id");
+
+            -- Replace ID-only relationships so cross-tenant links are rejected by PostgreSQL itself.
+            ALTER TABLE "Accounts" DROP CONSTRAINT IF EXISTS "FK_Accounts_Accounts_ParentAccountId";
+            ALTER TABLE "JournalEntryLines" DROP CONSTRAINT IF EXISTS "FK_JournalEntryLines_Accounts_AccountId";
+            ALTER TABLE "JournalEntryLines" DROP CONSTRAINT IF EXISTS "FK_JournalEntryLines_Parties_PartyId";
+            ALTER TABLE "JournalEntryLines" DROP CONSTRAINT IF EXISTS "FK_JournalEntryLines_JournalEntries_JournalEntryId";
+
+            ALTER TABLE "Accounts"
+                ADD CONSTRAINT "FK_Accounts_Accounts_TenantId_ParentAccountId"
+                FOREIGN KEY ("TenantId", "ParentAccountId")
+                REFERENCES "Accounts" ("TenantId", "Id") ON DELETE RESTRICT;
+
+            ALTER TABLE "JournalEntryLines"
+                ADD CONSTRAINT "FK_JournalEntryLines_Accounts_TenantId_AccountId"
+                FOREIGN KEY ("TenantId", "AccountId")
+                REFERENCES "Accounts" ("TenantId", "Id") ON DELETE RESTRICT;
+
+            ALTER TABLE "JournalEntryLines"
+                ADD CONSTRAINT "FK_JournalEntryLines_Parties_TenantId_PartyId"
+                FOREIGN KEY ("TenantId", "PartyId")
+                REFERENCES "Parties" ("TenantId", "Id") ON DELETE RESTRICT;
+
+            ALTER TABLE "JournalEntryLines"
+                ADD CONSTRAINT "FK_JournalEntryLines_JournalEntries_TenantId_JournalEntryId"
+                FOREIGN KEY ("TenantId", "JournalEntryId")
+                REFERENCES "JournalEntries" ("TenantId", "Id") ON DELETE CASCADE;
             """);
     }
 
