@@ -249,6 +249,21 @@ platformAdminApi.MapPost("/companies/{tenantId:guid}/users", async (
     return Results.Ok(new { message = "کاربر به شرکت اختصاص یافت.", userId = user.Id, email = user.Email, role });
 });
 
+platformAdminApi.MapPut("/companies/{tenantId:guid}/users/{membershipId:long}/role", async (
+    Guid tenantId, long membershipId, PlatformAdminUpdateMembershipRoleRequest request, AppDbContext db) =>
+{
+    var role = request.Role?.Trim();
+    var allowedRoles = new[] { TenantRoles.Owner, TenantRoles.Admin, TenantRoles.Accountant, TenantRoles.Sales, TenantRoles.Service, TenantRoles.ReadOnly };
+    if (role is null || !allowedRoles.Contains(role, StringComparer.Ordinal))
+        return Results.BadRequest(new { message = "نقش انتخاب‌شده معتبر نیست." });
+    var membership = await db.TenantMemberships
+        .FirstOrDefaultAsync(x => x.Id == membershipId && x.TenantId == tenantId);
+    if (membership is null) return Results.NotFound(new { message = "عضویت پیدا نشد." });
+    membership.Role = role;
+    await db.SaveChangesAsync();
+    return Results.Ok(new { membership.Id, membership.Role, message = "نقش کاربر به‌روزرسانی شد." });
+});
+
 platformAdminApi.MapPost("/companies/{tenantId:guid}/users/{membershipId:long}/toggle-active", async (
     Guid tenantId, long membershipId, AppDbContext db) =>
 {
@@ -1250,3 +1265,5 @@ public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Add
 
 public sealed record PlatformAdminCreateTenantRequest(string? Name);
 public sealed record PlatformAdminCreateUserRequest(string? Email, string? Password, string? Role);
+
+public sealed record PlatformAdminUpdateMembershipRoleRequest(string? Role);
