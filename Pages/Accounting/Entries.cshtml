@@ -49,7 +49,7 @@
             bp.className='pill '+(balanced?'good':'bad');bp.textContent=balanced?'متوازن':'نامتوازن';balance.appendChild(bp);
             pp.className='pill '+(e.isPosted?'good':'');pp.textContent=e.isPosted?'ثبت نهایی':'پیش‌نویس';posted.appendChild(pp);
             tr.appendChild(balance);tr.appendChild(posted);
-            const action=document.createElement('td'), button=document.createElement('button');button.className='view-button';button.textContent='جزئیات';button.addEventListener('click',()=>loadDetails(e.id));action.appendChild(button);tr.appendChild(action);rows.appendChild(tr);
+            const action=document.createElement('td'), button=document.createElement('button');button.className='view-button';button.textContent='جزئیات';button.addEventListener('click',()=>loadDetails(e.id));action.appendChild(button);if(!e.isPosted){const postButton=document.createElement('button');postButton.className='view-button';postButton.style.marginRight='6px';postButton.textContent='ثبت نهایی';postButton.addEventListener('click',()=>postEntry(e.id));action.appendChild(postButton);}tr.appendChild(action);rows.appendChild(tr);
         }
         if(!filtered.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.textContent='سندی برای نمایش پیدا نشد.';tr.appendChild(td);rows.appendChild(tr);}
     }
@@ -64,6 +64,17 @@
             document.getElementById('totalCredit').textContent=num(entries.reduce((s,e)=>s+Number(e.creditTotal||0),0))+' ریال';
             message.textContent=entries.length>=200?'حداکثر ۲۰۰ سند اخیر نمایش داده می‌شود.':'';
             render();
+        }catch(e){message.textContent=e.message||'ارتباط با سرور برقرار نشد.';}
+    }
+    async function postEntry(id){
+        if(!confirm('سند پس از ثبت نهایی به‌عنوان سند قطعی علامت‌گذاری می‌شود. ادامه می‌دهید؟'))return;
+        message.textContent='در حال بررسی تراز و ثبت نهایی سند…';
+        try{
+            const response=await fetch('/api/accounting/entries/'+encodeURIComponent(id)+'/post',{method:'POST'});
+            const data=await response.json();
+            if(!response.ok)throw new Error(data.message||data.detail||'ثبت نهایی سند ناموفق بود.');
+            message.textContent=data.message||'سند ثبت نهایی شد.';
+            await loadEntries();
         }catch(e){message.textContent=e.message||'ارتباط با سرور برقرار نشد.';}
     }
     async function loadDetails(id){
