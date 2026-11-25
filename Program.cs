@@ -723,7 +723,19 @@ accountingApi.MapGet("/invoices", async Task<IResult> (IServiceProvider services
         .OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.Id)
         .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, PartyName = x.Party.Name, x.Subtotal, x.TaxTotal, x.Total, x.JournalEntryId })
         .ToListAsync();
-    return Results.Ok(rows);
+    var invoiceIds = rows.Select(x => x.Id).ToList();
+    var paidByInvoice = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.InvoiceId.HasValue && invoiceIds.Contains(x.InvoiceId.Value))
+        .GroupBy(x => x.InvoiceId!.Value)
+        .Select(g => new { InvoiceId = g.Key, AmountPaid = g.Sum(x => x.Amount) })
+        .ToDictionaryAsync(x => x.InvoiceId, x => x.AmountPaid);
+    return Results.Ok(rows.Select(x =>
+    {
+        var amountPaid = paidByInvoice.GetValueOrDefault(x.Id, 0m);
+        return new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, x.PartyName,
+            x.Subtotal, x.TaxTotal, x.Total, x.JournalEntryId, AmountPaid = amountPaid,
+            Remaining = Math.Max(0m, x.Total - amountPaid) };
+    }));
 });
 
 accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
