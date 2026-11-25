@@ -1,0 +1,70 @@
+@page
+@{
+    ViewData["Title"] = "صورت سود و زیان";
+}
+<div dir="rtl" style="max-width:1100px;margin:auto;font-family:Tahoma,Arial,sans-serif">
+    <h1>صورت سود و زیان</h1>
+    <p>گزارش بر اساس اسناد ثبت‌نهایی‌شده و حساب‌هایی با نوع درآمد یا هزینه محاسبه می‌شود.</p>
+    <form id="filters" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:20px 0">
+        <label>از تاریخ <input id="from" type="date" style="display:block;padding:9px;margin-top:5px" /></label>
+        <label>تا تاریخ <input id="to" type="date" style="display:block;padding:9px;margin-top:5px" /></label>
+        <button type="submit" style="padding:10px 18px">نمایش گزارش</button>
+        <button type="button" id="export" style="padding:10px 18px">خروجی CSV</button>
+    </form>
+    <p id="message" role="status" style="white-space:pre-wrap"></p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0">
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>جمع درآمد</div><strong id="revenueTotal">—</strong></div>
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>جمع هزینه</div><strong id="expenseTotal">—</strong></div>
+        <div style="padding:18px;border:1px solid #ddd;border-radius:10px"><div>سود / زیان خالص</div><strong id="netProfit">—</strong></div>
+    </div>
+    <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">نوع</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">کد حساب</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">عنوان حساب</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">بدهکار</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">بستانکار</th><th style="text-align:right;padding:10px;border-bottom:1px solid #ddd">مانده گزارش</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6">برای دریافت گزارش، بازه تاریخ را انتخاب کنید یا روی نمایش گزارش بزنید.</td></tr></tbody>
+        </table>
+    </div>
+</div>
+<script>
+(() => {
+    const $ = id => document.getElementById(id);
+    let report = null;
+    const fmt = value => Number(value || 0).toLocaleString('fa-IR', {maximumFractionDigits:2});
+    async function load() {
+        $('message').textContent = 'در حال دریافت گزارش…';
+        const params = new URLSearchParams();
+        if ($('from').value) params.set('from', $('from').value);
+        if ($('to').value) params.set('to', $('to').value);
+        try {
+            const response = await fetch('/api/accounting/reports/income-statement?' + params.toString());
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || data.detail || 'دریافت گزارش ناموفق بود.');
+            report = data;
+            $('revenueTotal').textContent = fmt(data.revenueTotal) + ' ریال';
+            $('expenseTotal').textContent = fmt(data.expenseTotal) + ' ریال';
+            $('netProfit').textContent = fmt(data.netProfit) + ' ریال';
+            const rows = [...data.revenueAccounts.map(x => ({...x,label:'درآمد',balance:x.credit-x.debit})), ...data.expenseAccounts.map(x => ({...x,label:'هزینه',balance:x.debit-x.credit}))];
+            const body = $('rows'); body.replaceChildren();
+            for (const item of rows) {
+                const tr = document.createElement('tr');
+                for (const value of [item.label,item.code,item.title,fmt(item.debit),fmt(item.credit),fmt(item.balance)]) {
+                    const td = document.createElement('td'); td.textContent = value; td.style.padding='10px'; td.style.borderBottom='1px solid #eee'; tr.appendChild(td);
+                }
+                body.appendChild(tr);
+            }
+            if (!rows.length) { const tr=document.createElement('tr'), td=document.createElement('td'); td.colSpan=6; td.textContent='در این بازه حساب درآمد یا هزینه ثبت‌نهایی‌شده‌ای وجود ندارد.'; tr.appendChild(td); body.appendChild(tr); }
+            $('message').textContent = 'گزارش بر اساس اسناد ثبت‌نهایی‌شده بارگذاری شد.';
+        } catch (error) { $('message').textContent = error.message || 'ارتباط با سرور برقرار نشد.'; }
+    }
+    $('filters').addEventListener('submit', e => {e.preventDefault(); load();});
+    $('export').addEventListener('click', () => {
+        if (!report) { $('message').textContent='ابتدا گزارش را بارگذاری کنید.'; return; }
+        const rows=[['نوع','کد حساب','عنوان حساب','بدهکار','بستانکار','مانده']];
+        for (const x of report.revenueAccounts) rows.push(['درآمد',x.code,x.title,x.debit,x.credit,x.credit-x.debit]);
+        for (const x of report.expenseAccounts) rows.push(['هزینه',x.code,x.title,x.debit,x.credit,x.debit-x.credit]);
+        const csv='\uFEFF'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+        const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+        const a=document.createElement('a'); a.href=url; a.download='income-statement.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    load();
+})();
+</script>
