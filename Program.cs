@@ -843,9 +843,10 @@ accountingApi.MapPost("/payments", async (PaymentCreateRequest request, IService
     if (invoice is null) return Results.BadRequest(new { message = "برای جلوگیری از ثبت نادرست حساب طرف مقابل، در این نسخه دریافت/پرداخت باید به فاکتور ثبت‌نهایی‌شده متصل باشد." });
     if (request.Amount > invoice.Total) return Results.BadRequest(new { message = "مبلغ عملیات نمی‌تواند از مبلغ کل فاکتور بیشتر باشد." });
     var accounts = await db.Accounts.ForTenant(tenantId).Where(x => x.IsActive).ToListAsync();
-    var counterpart = invoice.Kind == InvoiceKinds.Sales
-        ? accounts.SingleOrDefaultSafe(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران")))
-        : accounts.SingleOrDefaultSafe(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران")));
+    var counterpartCandidates = invoice.Kind == InvoiceKinds.Sales
+        ? accounts.Where(a => a.Type == "Asset" && (a.Title.Contains("دریافتنی") || a.Title.Contains("مشتری") || a.Title.Contains("بدهکاران"))).ToList()
+        : accounts.Where(a => a.Type == "Liability" && (a.Title.Contains("پرداختنی") || a.Title.Contains("تامین") || a.Title.Contains("تأمین") || a.Title.Contains("بستانکاران"))).ToList();
+    var counterpart = counterpartCandidates.Count == 1 ? counterpartCandidates[0] : null;
     if (counterpart is null) return Results.Conflict(new { message = "حساب دریافتنی/پرداختنی فاکتور مشخص نیست؛ ابتدا عنوان حساب را تنظیم کنید." });
     var journal = new JournalEntry { TenantId = tenantId, DocumentNumber = "PAY-" + number,
         DocumentDate = DateTime.SpecifyKind(request.PaymentDate.Date, DateTimeKind.Utc),
