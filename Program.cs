@@ -364,6 +364,7 @@ accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
     var balances = await db.JournalEntryLines.AsNoTracking()
         .ForTenant(tenantId)
         .Where(line => line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.IsPosted
             && line.JournalEntry.DocumentDate >= start
             && line.JournalEntry.DocumentDate < endExclusive)
         .GroupBy(line => new { line.AccountId, line.Account.Code, line.Account.Title })
@@ -427,6 +428,7 @@ accountingApi.MapGet("/reports/general-ledger", async Task<IResult> (
         .Where(line => line.TenantId == tenantId
             && line.AccountId == account.Id
             && line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.IsPosted
             && line.JournalEntry.DocumentDate >= start
             && line.JournalEntry.DocumentDate < endExclusive)
         .OrderBy(line => line.JournalEntry.DocumentDate)
