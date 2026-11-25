@@ -1,0 +1,74 @@
+@page
+@{
+    ViewData["Title"] = "مانده فاکتورها";
+}
+<div class="business-page" dir="rtl">
+    <section class="hero">
+        <div><span class="eyebrow">گزارش‌های بازرگانی و خزانه‌داری</span><h1>مانده فاکتورهای باز</h1>
+        <p>فاکتورهای ثبت‌نهایی‌شده فروش و خرید، مبالغ تسویه‌شده و مانده قابل دریافت یا پرداخت؛ محاسبه بر اساس دریافت‌ها و پرداخت‌های متصل به هر فاکتور.</p></div>
+    </section>
+    <section class="panel">
+        <div class="filters">
+            <label>نوع فاکتور
+                <select id="kind"><option value="">فروش و خرید</option><option value="Sales">فروش (مطالبات)</option><option value="Purchase">خرید (بدهی‌ها)</option></select>
+            </label>
+            <label>از تاریخ<input id="fromDate" type="date"></label>
+            <label>تا تاریخ<input id="toDate" type="date"></label>
+            <label>جست‌وجو<input id="search" type="search" placeholder="شماره فاکتور یا نام طرف حساب"></label>
+            <div class="filter-actions"><button id="load" type="button">تهیه گزارش</button><button id="clear" type="button" class="secondary">پاک‌کردن فیلترها</button></div>
+        </div>
+        <p id="message" role="status" aria-live="polite"></p>
+        <div class="totals">
+            <div><span>تعداد فاکتورهای باز</span><strong id="count">۰</strong></div>
+            <div><span>مبلغ کل فاکتورها</span><strong id="total">۰</strong></div>
+            <div><span>مبلغ تسویه‌شده</span><strong id="paid">۰</strong></div>
+            <div><span>مانده قابل دریافت / پرداخت</span><strong id="remaining">۰</strong></div>
+        </div>
+        <div class="table-scroll">
+            <table><thead><tr><th>شماره فاکتور</th><th>نوع</th><th>تاریخ</th><th>مشتری / تأمین‌کننده</th><th>مبلغ فاکتور</th><th>تسویه‌شده</th><th>مانده</th><th>سند حسابداری</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="8">برای تهیه گزارش، روی «تهیه گزارش» بزنید.</td></tr></tbody></table>
+        </div>
+        <p class="report-note">این گزارش فقط فاکتورهای ثبت‌نهایی‌شده با مانده مثبت را نمایش می‌دهد. پیش‌نویس‌ها و فاکتورهای تسویه‌شده در فهرست نیستند.</p>
+    </section>
+</div>
+<style>
+.business-page{max-width:1500px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.hero{padding:24px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.hero h1{font-size:25px;margin:9px 0}.hero p{margin:0;color:#61738a;line-height:1.9}.panel{padding:20px;margin-bottom:18px;background:#fff;border:1px solid #e1e8f0;border-radius:16px;box-shadow:0 5px 20px #233b5308}.filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.filters label{display:flex;flex-direction:column;gap:7px;min-width:150px;font-size:12px;font-weight:700}.filters input,.filters select{border:1px solid #d7e0eb;border-radius:9px;padding:10px;background:#fff;min-height:40px}.filter-actions{display:flex;gap:8px;flex-wrap:wrap}.business-page button{border:0;border-radius:9px;background:#1769aa;color:white;padding:10px 15px;font-weight:700;cursor:pointer}.business-page button.secondary{background:#edf3f9;color:#29445e}.totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.totals div{padding:15px;border-radius:12px;background:#f5f8fc;border:1px solid #e5edf6}.totals span{display:block;font-size:12px;color:#65758a;margin-bottom:9px}.totals strong{font-size:17px;overflow-wrap:anywhere}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;white-space:nowrap}th,td{padding:12px 10px;border-bottom:1px solid #edf1f6;text-align:right;font-size:12px}th{background:#f7f9fc;color:#53657b}td:last-child{font-weight:700}.report-note{font-size:12px;color:#6c7b8e;line-height:1.8;margin:14px 0 0}#message{color:#9a4d18;min-height:22px;margin:12px 0}@media(max-width:800px){.totals{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:12px}.hero{padding:18px}}
+</style>
+<script>
+(() => {
+ const $=id=>document.getElementById(id);
+ const money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+ let allRows=[];
+ const params=()=>{const q=new URLSearchParams();if($('kind').value)q.set('kind',$('kind').value);if($('fromDate').value)q.set('fromDate',$('fromDate').value);if($('toDate').value)q.set('toDate',$('toDate').value);return q.toString();};
+ function render(){
+   const term=$('search').value.trim().toLocaleLowerCase();
+   const rows=allRows.filter(x=>!term||x.number.toLocaleLowerCase().includes(term)||x.partyName.toLocaleLowerCase().includes(term));
+   $('count').textContent=rows.length.toLocaleString('fa-IR');
+   $('total').textContent=money(rows.reduce((s,x)=>s+x.total,0))+' ریال';
+   $('paid').textContent=money(rows.reduce((s,x)=>s+x.amountPaid,0))+' ریال';
+   $('remaining').textContent=money(rows.reduce((s,x)=>s+x.remaining,0))+' ریال';
+   const body=$('rows');body.replaceChildren();
+   for(const x of rows){
+     const tr=document.createElement('tr');
+     const values=[x.number,x.kind==='Sales'?'فروش':'خرید',new Date(x.invoiceDate).toLocaleDateString('fa-IR'),x.partyName,money(x.total)+' ریال',money(x.amountPaid)+' ریال',money(x.remaining)+' ریال',x.journalEntryId?'شماره داخلی '+x.journalEntryId:'—'];
+     values.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i===6)td.style.color='#a44d19';tr.append(td);});
+     body.append(tr);
+   }
+   if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.textContent='فاکتور بازی مطابق فیلترهای انتخاب‌شده پیدا نشد.';tr.append(td);body.append(tr);}
+ }
+ async function load(){
+   $('message').textContent='در حال تهیه گزارش...';
+   try{
+     const query=params(),r=await fetch('/api/accounting/reports/invoice-balances'+(query?'?'+query:'')),data=await r.json();
+     if(!r.ok)throw Error(data.message||'تهیه گزارش ناموفق بود.');
+     allRows=(data.invoices||[]).map(x=>({...x,total:Number(x.total||0),amountPaid:Number(x.amountPaid||0),remaining:Number(x.remaining||0)}));
+     $('message').textContent='گزارش به‌روز شد.';
+     render();
+   }catch(e){$('message').textContent=e.message;allRows=[];render();}
+ }
+ $('load').addEventListener('click',load);
+ $('clear').addEventListener('click',()=>{$('kind').value='';$('fromDate').value='';$('toDate').value='';$('search').value='';load();});
+ $('search').addEventListener('input',render);
+ load();
+})();
+</script>
