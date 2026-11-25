@@ -67,7 +67,7 @@ public sealed class LoginModel(
                 });
 
                 var adminUrl = Url.Page("/PlatformAdmin") ?? "/PlatformAdmin";
-                return LocalRedirect(ReturnUrl == "/" ? adminUrl : ReturnUrl);
+                return LocalRedirect(adminUrl);
             }
 
             // Do not issue an authenticated cookie until a valid active workspace
