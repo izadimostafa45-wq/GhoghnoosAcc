@@ -25,6 +25,7 @@
                     <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
                     <div class="sub-nav">
                         <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">مدیریت حساب‌ها</a>
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Parties" ? "active" : "")" asp-area="" asp-page="/Accounting/Parties">مدیریت اشخاص</a>
                     </div>
                 </details>
                 <a class="side-link" asp-area="" asp-page="/Accounting/Index">
