@@ -65,6 +65,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .HasForeignKey(x => new { x.TenantId, x.InvoiceId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id })
             .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Invoice>().HasOne(x => x.CounterpartyAccount).WithMany()
+            .HasForeignKey(x => new { x.TenantId, x.CounterpartyAccountId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Invoice>().HasOne(x => x.OperatingAccount).WithMany()
+            .HasForeignKey(x => new { x.TenantId, x.OperatingAccountId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Invoice>().HasOne(x => x.TaxAccount).WithMany()
+            .HasForeignKey(x => new { x.TenantId, x.TaxAccountId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Invoice>().HasOne(x => x.Party).WithMany()
             .HasForeignKey(x => new { x.TenantId, x.PartyId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id })
