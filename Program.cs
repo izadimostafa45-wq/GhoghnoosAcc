@@ -48,9 +48,15 @@ builder.Services.AddAuthorization(options =>
     // are implemented as a separate provisioning step.
     options.AddPolicy("TenantRequired", policy => policy
         .RequireAuthenticatedUser()
-        .RequireAssertion(context =>
-            Guid.TryParse(context.User.FindFirst(TenantContext.TenantIdClaimType)?.Value, out var tenantId)
-            && tenantId != Guid.Empty));
+        .RequireAssertion(context => TenantRoleAuthorization.HasValidTenantAndRole(context.User)));
+    options.AddPolicy("TenantRead", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
+            context.User, TenantRoleAuthorization.ReadRoles)));
+    options.AddPolicy("TenantWrite", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => TenantRoleAuthorization.HasAnyRole(
+            context.User, TenantRoleAuthorization.WriteRoles)));
 });
 builder.Services.AddRazorPages(options =>
 {
@@ -125,7 +131,9 @@ app.MapPost("/api/accounting/validate-entry",
         return result.IsValid ? (IResult)Results.Ok(result) : Results.BadRequest(result);
     });
 
-var accountingApi = app.MapGroup("/api/accounting").RequireAuthorization("TenantRequired");
+var accountingApi = app.MapGroup("/api/accounting")
+    .RequireAuthorization("TenantRequired")
+    .RequireAuthorization("TenantRead");
 
 accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
@@ -169,7 +177,7 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
     db.Accounts.Add(account);
     await db.SaveChangesAsync();
     return Results.Created($"/api/accounting/accounts/{account.Id}",
-        new { account.Id, account.Code, account.Title, account.Type, account.IsActive });
+        new { account.Id, account.Code, account.Title, account.Type, account.IsActive }).RequireAuthorization("TenantWrite");
 });
 
 accountingApi.MapGet("/entries", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
@@ -256,7 +264,7 @@ accountingApi.MapPost("/entries", async Task<IResult> (
     {
         entry.Id, entry.DocumentNumber, entry.DocumentDate, entry.Description,
         entry.IsPosted, validation.DebitTotal, validation.CreditTotal
-    });
+    }).RequireAuthorization("TenantWrite");
 });
 
 accountingApi.MapGet("/entries/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
