@@ -30,6 +30,12 @@
                         <span class="nav-icon">▣</span><span>مدیریت شرکت‌ها و کاربران</span>
                     </a>
                 }
+                @if (User.Identity?.IsAuthenticated == true && !User.HasClaim("ghoghnoos:platform_admin", "true"))
+                {
+                    <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/ChooseCompany" ? "active" : "")" asp-area="" asp-page="/ChooseCompany">
+                        <span class="nav-icon">▣</span><span>انتخاب شرکت</span>
+                    </a>
+                }
                 <details class="nav-group" open>
                     <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
                     <div class="sub-nav">
