@@ -1311,7 +1311,40 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
 }).RequireAuthorization("TenantWrite");
 
 
+app.MapPost("/api/assistant/chat", async (AssistantChatRequest request, IConfiguration configuration) =>
+{
+    var message = request.Message?.Trim();
+    if (string.IsNullOrWhiteSpace(message) || message.Length > 2000)
+        return Results.BadRequest(new { message = "متن سؤال الزامی است و حداکثر ۲۰۰۰ نویسه می‌تواند باشد." });
+    var apiKey = configuration["OpenAI:ApiKey"];
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return Results.Problem("دستیار در رابط کاربری فعال است، اما کلید API آن هنوز در پیکربندی امن سرور ثبت نشده است.", statusCode: 503);
+    var model = configuration["OpenAI:Model"] ?? "gpt-4.1-mini";
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+    using var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", new
+    {
+        model,
+        messages = new object[]
+        {
+            new { role = "system", content = "تو دستیار فارسی‌زبان نرم‌افزار حسابداری ققنوس هستی. پاسخ‌ها را کوتاه، روشن و فارسی بده. بدون درخواست و تأیید کاربر ادعا نکن که عملیات مالی انجام داده‌ای. برای ثبت نهایی یا تغییر داده‌ها، کاربر را به فرم مربوط هدایت کن." },
+            new { role = "user", content = message }
+        },
+        temperature = 0.3
+    });
+    if (!response.IsSuccessStatusCode)
+    {
+        var detail = await response.Content.ReadAsStringAsync();
+        return Results.Problem("سرویس هوش مصنوعی پاسخ موفق نداد. تنظیمات مدل و کلید API را بررسی کنید.", statusCode: 502);
+    }
+    using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+    var reply = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+    return Results.Ok(new { reply });
+}).RequireAuthorization();
+
 app.Run();
+
+public sealed record AssistantChatRequest(string? Message);
 
 public sealed record UpdateAccountRequest(string? Code, string? Title, string? Type);
 public sealed record UpdatePartyRequest(string? Name, string? Phone, string? Address);
