@@ -339,4 +339,55 @@ accountingApi.MapPost("/parties", async Task<IResult> (CreatePartyRequest reques
         new { party.Id, party.Name, party.Phone, party.Address, party.IsActive });
 }).RequireAuthorization("TenantWrite");
 
+
+accountingApi.MapGet("/reports/trial-balance", async Task<IResult> (
+    DateTime? from,
+    DateTime? to,
+    IServiceProvider services,
+    ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId)
+        return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
+    if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نباید بعد از تاریخ پایان باشد." });
+
+    var start = from.HasValue
+        ? DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc)
+        : DateTime.SpecifyKind(new DateTime(1900, 1, 1), DateTimeKind.Utc);
+    var endExclusive = to.HasValue
+        ? DateTime.SpecifyKind(to.Value.Date.AddDays(1), DateTimeKind.Utc)
+        : DateTime.SpecifyKind(DateTime.MaxValue.Date, DateTimeKind.Utc);
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var balances = await db.JournalEntryLines.AsNoTracking()
+        .ForTenant(tenantId)
+        .Where(line => line.JournalEntry.TenantId == tenantId
+            && line.JournalEntry.DocumentDate >= start
+            && line.JournalEntry.DocumentDate < endExclusive)
+        .GroupBy(line => new { line.AccountId, line.Account.Code, line.Account.Title })
+        .Select(group => new
+        {
+            accountId = group.Key.AccountId,
+            code = group.Key.Code,
+            title = group.Key.Title,
+            debit = group.Sum(line => line.Debit),
+            credit = group.Sum(line => line.Credit),
+            documentLines = group.Count()
+        })
+        .OrderBy(row => row.code)
+        .ToListAsync();
+
+    return Results.Ok(new
+    {
+        from = from?.Date,
+        to = to?.Date,
+        accounts = balances,
+        debitTotal = balances.Sum(row => row.debit),
+        creditTotal = balances.Sum(row => row.credit),
+        difference = balances.Sum(row => row.debit) - balances.Sum(row => row.credit)
+    });
+});
+
 app.Run();
