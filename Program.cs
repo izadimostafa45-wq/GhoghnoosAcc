@@ -1089,8 +1089,7 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
         request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.TaxRate < 0 || x.TaxRate > 100 ||
-        decimal.Round(x.Quantity * x.UnitPrice, 2) < 0))
+        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
@@ -1099,9 +1098,10 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
         return Results.Conflict(new { message = "شماره فاکتور قبلاً استفاده شده است." });
     var lines = request.Lines.Select(x =>
     {
-        var subtotal = decimal.Round(x.Quantity * x.UnitPrice, 2);
+        var gross = decimal.Round(x.Quantity * x.UnitPrice, 2);
+        var subtotal = gross - x.Discount;
         var tax = decimal.Round(subtotal * x.TaxRate / 100m, 2);
-        return new InvoiceLine { TenantId = tenantId, Description = x.Description!.Trim(), Quantity = x.Quantity, UnitPrice = x.UnitPrice, TaxRate = x.TaxRate, LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax };
+        return new InvoiceLine { TenantId = tenantId, Description = x.Description!.Trim(), Quantity = x.Quantity, UnitPrice = x.UnitPrice, Discount = x.Discount, TaxRate = x.TaxRate, LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax };
     }).ToList();
     var invoice = new Invoice { TenantId = tenantId, Number = number, Kind = request.Kind, Status = InvoiceStatuses.Draft,
         InvoiceDate = DateTime.SpecifyKind(request.InvoiceDate.Date, DateTimeKind.Utc), PartyId = request.PartyId,
@@ -1123,7 +1123,7 @@ accountingApi.MapGet("/invoices/{id:int}", async Task<IResult> (int id, IService
         .Where(x => x.Id == id)
         .Select(x => new { x.Id, x.Number, x.Kind, x.Status, x.InvoiceDate, x.PartyId, x.Notes,
             x.Subtotal, x.TaxTotal, x.Total,
-            Lines = x.Lines.OrderBy(line => line.Id).Select(line => new { line.Description, line.Quantity, line.UnitPrice, line.TaxRate }).ToList() })
+            Lines = x.Lines.OrderBy(line => line.Id).Select(line => new { line.Description, line.Quantity, line.UnitPrice, line.Discount, line.TaxRate }).ToList() })
         .FirstOrDefaultAsync();
     return invoice is null ? Results.NotFound(new { message = "فاکتور پیدا نشد." }) : Results.Ok(invoice);
 });
@@ -1138,7 +1138,7 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
         request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.TaxRate < 0 || x.TaxRate > 100))
+        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
@@ -1158,10 +1158,11 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
     invoice.Lines.Clear();
     foreach (var item in request.Lines)
     {
-        var subtotal = decimal.Round(item.Quantity * item.UnitPrice, 2);
+        var gross = decimal.Round(item.Quantity * item.UnitPrice, 2);
+        var subtotal = gross - item.Discount;
         var tax = decimal.Round(subtotal * item.TaxRate / 100m, 2);
         invoice.Lines.Add(new InvoiceLine { TenantId = tenantId, Description = item.Description!.Trim(),
-            Quantity = item.Quantity, UnitPrice = item.UnitPrice, TaxRate = item.TaxRate,
+            Quantity = item.Quantity, UnitPrice = item.UnitPrice, Discount = item.Discount, TaxRate = item.TaxRate,
             LineSubtotal = subtotal, LineTax = tax, LineTotal = subtotal + tax });
     }
     invoice.Subtotal = invoice.Lines.Sum(x => x.LineSubtotal);

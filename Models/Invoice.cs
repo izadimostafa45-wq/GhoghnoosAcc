@@ -52,6 +52,7 @@ public sealed class InvoiceLine : ITenantOwned
     [Required, StringLength(200)] public string Description { get; set; } = "";
     [Column(TypeName = "numeric(18,3)")] public decimal Quantity { get; set; } = 1m;
     [Column(TypeName = "numeric(18,2)")] public decimal UnitPrice { get; set; }
+    [Column(TypeName = "numeric(18,2)")] public decimal Discount { get; set; }
     [Column(TypeName = "numeric(5,2)")] public decimal TaxRate { get; set; }
     [Column(TypeName = "numeric(18,2)")] public decimal LineSubtotal { get; set; }
     [Column(TypeName = "numeric(18,2)")] public decimal LineTax { get; set; }

@@ -12,6 +12,7 @@ public sealed record InvoiceCreateLineRequest(
     string? Description,
     decimal Quantity,
     decimal UnitPrice,
+    decimal Discount,
     decimal TaxRate);
 
 public sealed record PaymentCreateRequest(
