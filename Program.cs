@@ -1093,8 +1093,9 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
-        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
         x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
@@ -1146,8 +1147,9 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
-        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
         x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
@@ -1274,6 +1276,7 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.PaymentDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != PaymentKinds.Receipt && request.Kind != PaymentKinds.Payment) ||
         request.PartyId <= 0 || request.CashAccountId <= 0 || request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب، حساب صندوق/بانک و مبلغ معتبر الزامی است." });
