@@ -492,10 +492,27 @@ accountingApi.MapPost("/entries", async Task<IResult> (
         .Where(x => x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
         .ToListAsync();
 
-    var accountMap = accounts
+    var accountAliases = accounts
         .SelectMany(a => new[] { (Key: a.Code, Account: a), (Key: a.Title, Account: a) })
         .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(g => g.Key, g => g.First().Account, StringComparer.OrdinalIgnoreCase);
+        .ToList();
+
+    // Never silently map a journal line to an arbitrary account when one account's
+    // code collides with another account's title (or two titles collide).
+    var ambiguousAliases = accountAliases
+        .Where(group => group.Select(x => x.Account.Id).Distinct().Count() > 1)
+        .Select(group => group.Key)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var ambiguousRequested = names.Where(name => ambiguousAliases.Contains(name)).ToList();
+    if (ambiguousRequested.Count > 0)
+        return Results.BadRequest(new
+        {
+            message = "A journal line matches more than one account. Use a unique account code or resolve duplicate account names.",
+            ambiguousAccounts = ambiguousRequested
+        });
+
+    var accountMap = accountAliases
+        .ToDictionary(group => group.Key, group => group.First().Account, StringComparer.OrdinalIgnoreCase);
 
     var missing = names.Where(name => !accountMap.ContainsKey(name)).ToList();
     if (missing.Count > 0)
