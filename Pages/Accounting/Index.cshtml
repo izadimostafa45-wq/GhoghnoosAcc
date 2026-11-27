@@ -12,10 +12,10 @@
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>کد یا عنوان حساب</th><th>بدهکار</th><th>بستانکار</th><th></th></tr></thead>
+            <thead><tr><th>کد یا عنوان حساب</th><th>شخص (اختیاری)</th><th>بدهکار</th><th>بستانکار</th><th></th></tr></thead>
             <tbody id="lines">
-                <tr><td><input aria-label="حساب ردیف اول" class="account" value="صندوق" /></td><td><input class="debit" type="number" min="0" step="0.01" value="100000" /></td><td><input class="credit" type="number" min="0" step="0.01" value="0" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
-                <tr><td><input aria-label="حساب ردیف دوم" class="account" value="سرمایه" /></td><td><input class="debit" type="number" min="0" step="0.01" value="0" /></td><td><input class="credit" type="number" min="0" step="0.01" value="100000" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
+                <tr><td><input aria-label="حساب ردیف اول" class="account" value="صندوق" /></td><td><input aria-label="شخص ردیف اول" class="party" placeholder="نام شخص (اختیاری)" /></td><td><input class="debit" type="number" min="0" step="0.01" value="100000" /></td><td><input class="credit" type="number" min="0" step="0.01" value="0" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
+                <tr><td><input aria-label="حساب ردیف دوم" class="account" value="سرمایه" /></td><td><input aria-label="شخص ردیف دوم" class="party" placeholder="نام شخص (اختیاری)" /></td><td><input class="debit" type="number" min="0" step="0.01" value="0" /></td><td><input class="credit" type="number" min="0" step="0.01" value="100000" /></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td></tr>
             </tbody>
         </table>
     </div>
@@ -46,10 +46,11 @@
     const today = new Date();
     document.getElementById('entryDate').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
-    function addRow(account = '', debit = '0', credit = '0') {
+    function addRow(account = '', debit = '0', credit = '0', partyName = '') {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td><input aria-label="کد یا عنوان حساب" class="account" maxlength="200"></td><td><input class="debit" type="number" min="0" step="0.01"></td><td><input class="credit" type="number" min="0" step="0.01"></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td>';
+        tr.innerHTML = '<td><input aria-label="کد یا عنوان حساب" class="account" maxlength="200"></td><td><input aria-label="شخص (اختیاری)" class="party" placeholder="نام شخص"></td><td><input class="debit" type="number" min="0" step="0.01"></td><td><input class="credit" type="number" min="0" step="0.01"></td><td><button type="button" class="remove" aria-label="حذف ردیف">حذف</button></td>';
         tr.querySelector('.account').value = account;
+        tr.querySelector('.party').value = partyName;
         tr.querySelector('.debit').value = debit;
         tr.querySelector('.credit').value = credit;
         body.appendChild(tr);
@@ -75,6 +76,7 @@
         if (!entryDate) { show('تاریخ سند را وارد کنید.', false); return; }
         const lines = [...body.querySelectorAll('tr')].map(tr => ({
             accountName: tr.querySelector('.account').value.trim(),
+            partyName: tr.querySelector('.party').value.trim() || null,
             debit: Number(tr.querySelector('.debit').value || 0),
             credit: Number(tr.querySelector('.credit').value || 0)
         }));

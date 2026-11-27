@@ -4,7 +4,7 @@ namespace GhoghnoosAcc.Models;
 
 /// <summary>
 /// A business workspace. Business-owned data must be scoped to this tenant.
-/// This model is not enabled in persistence until a reviewed EF migration is added.
+/// Its table is introduced by the AddTenantAdministration EF migration.
 /// </summary>
 public sealed class Tenant
 {

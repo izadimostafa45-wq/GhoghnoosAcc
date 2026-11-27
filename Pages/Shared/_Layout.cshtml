@@ -21,12 +21,52 @@
                 <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")" asp-area="" asp-page="/Index">
                     <span class="nav-icon">▦</span><span>داشبورد</span>
                 </a>
+                @if (User.HasClaim("ghoghnoos:platform_admin", "true"))
+                {
+                    <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/PlatformAdmin" ? "active" : "")" asp-area="" asp-page="/PlatformAdmin">
+                        <span class="nav-icon">♙</span><span>مدیریت کل سامانه</span>
+                    </a>
+                    <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/PlatformAdmin/Management" ? "active" : "")" asp-area="" asp-page="/PlatformAdmin/Management">
+                        <span class="nav-icon">▣</span><span>مدیریت شرکت‌ها و کاربران</span>
+                    </a>
+                }
+                @if (User.Identity?.IsAuthenticated == true && !User.HasClaim("ghoghnoos:platform_admin", "true"))
+                {
+                    <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/ChooseCompany" ? "active" : "")" asp-area="" asp-page="/ChooseCompany">
+                        <span class="nav-icon">▣</span><span>انتخاب شرکت</span>
+                    </a>
+                }
                 <details class="nav-group" open>
                     <summary class="side-link"><span class="nav-icon">▤</span><span>تعاریف</span><span class="nav-chevron">⌄</span></summary>
                     <div class="sub-nav">
-                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">مدیریت حساب‌ها</a>
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Accounts" ? "active" : "")" asp-area="" asp-page="/Accounting/Accounts">حساب‌های مالی</a>
+                        <a class="side-link sub-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Parties" ? "active" : "")" asp-area="" asp-page="/Accounting/Parties">مدیریت اشخاص</a>
                     </div>
                 </details>
+                <details class="nav-group" open>
+                    <summary class="side-link"><span class="nav-icon">⇄</span><span>عملیات مالی</span><span class="nav-chevron">⌄</span></summary>
+                    <div class="sub-nav">
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/OperationsFinancial">نمای کلی عملیات مالی</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Invoices" asp-route-kind="Sales">فاکتور فروش</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Invoices" asp-route-kind="Purchase">فاکتور خرید</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Payments" asp-route-kind="Receipt">سند دریافت وجه</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/Payments" asp-route-kind="Payment">سند پرداخت وجه</a>
+                    </div>
+                </details>
+                <details class="nav-group">
+                    <summary class="side-link"><span class="nav-icon">▧</span><span>گزارش‌ها</span><span class="nav-chevron">⌄</span></summary>
+                    <div class="sub-nav">
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/PartyBalances">مانده حساب اشخاص</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/InvoiceBalances">مانده فاکتورها</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/TrialBalance">تراز آزمایشی</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/GeneralLedger">دفتر کل</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/IncomeStatement">صورت سود و زیان</a>
+                        <a class="side-link sub-link" asp-area="" asp-page="/Accounting/BalanceSheet">ترازنامه</a>
+                    </div>
+                </details>
+                <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Accounting/Entries" ? "active" : "")" asp-area="" asp-page="/Accounting/Entries">
+                    <span class="nav-icon">▧</span><span>دفتر اسناد</span>
+                </a>
                 <a class="side-link" asp-area="" asp-page="/Accounting/Index">
                     <span class="nav-icon">▧</span><span>ثبت سند حسابداری</span>
                 </a>
@@ -53,5 +93,34 @@
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <button type="button" id="aiAssistantToggle" aria-label="باز کردن دستیار هوش مصنوعی" title="دستیار هوش مصنوعی">✦</button>
+        <section id="aiAssistantPanel" dir="rtl" aria-label="دستیار هوش مصنوعی" hidden>
+            <header><strong>دستیار هوش مصنوعی ققنوس</strong><button type="button" id="aiAssistantClose" aria-label="بستن">×</button></header>
+            <div id="aiAssistantMessages" role="log" aria-live="polite"><p class="ai-assistant-welcome">سلام! درباره کار با نرم‌افزار حسابداری سؤال کن.</p></div>
+            <form id="aiAssistantForm"><textarea id="aiAssistantInput" maxlength="2000" rows="2" required placeholder="سؤالت را بنویس…"></textarea><button type="submit" id="aiAssistantSend">ارسال</button></form>
+            <small id="aiAssistantStatus">برای پاسخ‌گویی، تنظیم کلید API دستیار در پیکربندی سرور لازم است.</small>
+        </section>
+        <style>
+        #aiAssistantToggle{position:fixed;z-index:1050;bottom:22px;left:22px;width:56px;height:56px;border:0;border-radius:50%;background:#2677c9;color:white;font-size:27px;box-shadow:0 6px 24px #173a5c40;cursor:pointer}
+        #aiAssistantPanel{position:fixed;z-index:1051;bottom:88px;left:22px;width:min(370px,calc(100vw - 28px));height:430px;max-height:calc(100vh - 120px);display:flex;flex-direction:column;background:white;border:1px solid #dbe5f0;border-radius:16px;box-shadow:0 12px 40px #173a5c30;overflow:hidden;font-family:Tahoma,Arial,sans-serif;color:#20334b}
+        #aiAssistantPanel[hidden]{display:none}#aiAssistantPanel header{display:flex;justify-content:space-between;align-items:center;padding:14px;background:#eaf4ff;border-bottom:1px solid #dbe5f0;font-size:13px}
+        #aiAssistantPanel header button{border:0;background:transparent;font-size:23px;cursor:pointer;color:#52667e}
+        #aiAssistantMessages{flex:1;overflow:auto;padding:12px;font-size:12px;line-height:1.9}#aiAssistantMessages p{white-space:pre-wrap;margin:0 0 10px}
+        #aiAssistantPanel form{display:flex;gap:7px;padding:10px;border-top:1px solid #edf1f6}#aiAssistantInput{flex:1;min-width:0;resize:vertical;border:1px solid #d9e3ef;border-radius:8px;padding:9px;font:inherit;font-size:12px}
+        #aiAssistantSend{border:0;border-radius:8px;padding:8px 12px;background:#2677c9;color:white;font:inherit;font-size:12px;cursor:pointer}
+        #aiAssistantStatus{padding:0 12px 10px;color:#7a8ca1;font-size:10px;line-height:1.7}
+        </style>
+        <script>
+        (() => {
+            const panel=document.getElementById('aiAssistantPanel'),toggle=document.getElementById('aiAssistantToggle'),form=document.getElementById('aiAssistantForm'),input=document.getElementById('aiAssistantInput'),messages=document.getElementById('aiAssistantMessages'),status=document.getElementById('aiAssistantStatus'),send=document.getElementById('aiAssistantSend');
+            toggle.addEventListener('click',()=>{panel.hidden=!panel.hidden;if(!panel.hidden)input.focus();});
+            document.getElementById('aiAssistantClose').addEventListener('click',()=>panel.hidden=true);
+            function addMessage(text,who){const p=document.createElement('p');p.textContent=(who==='user'?'شما: ':'دستیار: ')+text;messages.append(p);messages.scrollTop=messages.scrollHeight;}
+            form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;addMessage(message,'user');input.value='';send.disabled=true;status.textContent='در حال دریافت پاسخ…';try{const response=await fetch('/api/assistant/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});const raw=await response.text();let data={};try{data=raw?JSON.parse(raw):{};}catch{}if(!response.ok)throw new Error(data.message||'دستیار هنوز پیکربندی نشده یا پاسخ‌گویی ناموفق بود.');addMessage(data.reply||'پاسخی دریافت نشد.','assistant');status.textContent='';}catch(error){addMessage(error.message||'ارتباط با دستیار برقرار نشد.','assistant');status.textContent='اگر دستیار پیکربندی نشده، کلید API باید در تنظیمات امن سرور ثبت شود.';}finally{send.disabled=false;input.focus();}});
+        })();
+        </script>
+    }
 </body>
 </html>

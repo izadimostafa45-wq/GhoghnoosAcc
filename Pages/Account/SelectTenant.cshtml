@@ -1,0 +1,33 @@
+@page
+@model GhoghnoosAcc.Pages.Account.SelectTenantModel
+@{
+    ViewData["Title"] = "انتخاب شرکت";
+}
+<div class="container py-5" dir="rtl" style="max-width:620px">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4 p-md-5">
+            <h1 class="h3 mb-2">انتخاب شرکت</h1>
+            <p class="text-muted mb-4">برای ورود به اطلاعات حسابداری، شرکت فعال موردنظر را انتخاب کنید.</p>
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3" role="alert"></div>
+            <form method="post">
+                <input asp-for="ReturnUrl" type="hidden" />
+                <input asp-for="RememberMe" type="hidden" />
+                <div class="mb-3">
+                    <label asp-for="TenantId" class="form-label">شرکت</label>
+                    <select asp-for="TenantId" class="form-select" required>
+                        <option value="">انتخاب کنید…</option>
+                        @foreach (var tenant in Model.Tenants)
+                        {
+                            <option value="@tenant.Id">@tenant.Name — @tenant.Role</option>
+                        }
+                    </select>
+                    <span asp-validation-for="TenantId" class="text-danger"></span>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">ادامه به شرکت انتخاب‌شده</button>
+            </form>
+            <form method="post" asp-page="/Account/Logout" class="mt-3">
+                <button type="submit" class="btn btn-outline-secondary w-100">خروج از حساب</button>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,80 @@
+@page
+@{
+    ViewData["Title"] = "دفتر کل";
+}
+<div class="ledger-page" dir="rtl">
+    <section class="hero">
+        <div><span class="eyebrow">گزارش‌های مالی</span><h1>دفتر کل حساب</h1><p>گردش بدهکار و بستانکار هر حساب، به‌همراه مانده تجمعی را مشاهده و خروجی CSV دریافت کنید.</p></div>
+        <a href="/Accounting/TrialBalance" class="secondary-link">تراز آزمایشی ←</a>
+    </section>
+    <section class="panel">
+        <div class="filters">
+            <label>حساب<select id="accountSelect" required><option value="">در حال دریافت حساب‌ها…</option></select></label>
+            <label>از تاریخ<input id="fromDate" type="date"></label>
+            <label>تا تاریخ<input id="toDate" type="date"></label>
+            <button id="showLedger" type="button">نمایش گردش</button>
+            <button id="exportLedger" class="secondary-button" type="button" disabled>خروجی CSV</button>
+        </div>
+        <p id="ledgerMessage" class="message" role="status"></p>
+        <div id="accountSummary" class="account-summary" hidden></div>
+        <div class="totals"><div><span>مانده ابتدای دوره</span><strong id="openingBalance">—</strong></div><div><span>جمع بدهکار</span><strong id="debitTotal">—</strong></div><div><span>جمع بستانکار</span><strong id="creditTotal">—</strong></div><div><span>مانده پایان دوره</span><strong id="endingBalance">—</strong></div></div>
+        <div class="table-wrap"><table><thead><tr><th>تاریخ</th><th>شماره سند</th><th>شرح سند</th><th>شرح ردیف</th><th>بدهکار</th><th>بستانکار</th><th>مانده تجمعی</th></tr></thead><tbody id="ledgerRows"><tr><td colspan="7">برای مشاهده گردش، حساب را انتخاب کنید.</td></tr></tbody></table></div>
+    </section>
+</div>
+<style>
+.ledger-page{max-width:1450px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.hero{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:25px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.hero h1{font-size:25px;margin:9px 0}.hero p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.secondary-link{background:#edf5ff;color:#2465a5;text-decoration:none;padding:12px 16px;border-radius:10px;white-space:nowrap;font-size:12px}.panel{padding:22px;background:#fff;border:1px solid #e2eaf4;border-radius:15px}.filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.filters label{display:flex;flex-direction:column;gap:7px;color:#64768b;font-size:11px;font-weight:700}.filters select,.filters input{min-width:175px;padding:10px;border:1px solid #d9e3ef;border-radius:9px;font:inherit;font-size:12px;background:#fff}.filters button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-size:12px;cursor:pointer;background:#2677c9;color:white}.filters .secondary-button{background:#edf5ff;color:#2465a5}.filters button:disabled{opacity:.45;cursor:not-allowed}.message{font-size:11px;color:#71849a;white-space:pre-wrap;line-height:1.8}.account-summary{margin:15px 0;padding:14px;border-radius:10px;background:#f3f8ff;color:#31577c;font-size:13px;font-weight:700}.totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}.totals div{display:flex;flex-direction:column;gap:8px;padding:15px;border:1px solid #e5edf6;border-radius:11px;background:#f8fbff}.totals span{font-size:11px;color:#8292a6}.totals strong{font-size:17px;color:#2a4b6c;overflow-wrap:anywhere}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:12px 10px;text-align:right;border-bottom:1px solid #edf1f6;font-size:11px;line-height:1.8}th{background:#f7faff;color:#64768b}td{color:#435970}@@media(max-width:650px){.hero{align-items:start;flex-direction:column;padding:20px}.hero h1{font-size:21px}.panel{padding:14px}.totals{gap:7px}.totals div{padding:10px}.totals strong{font-size:13px}}
+</style>
+<script>
+(() => {
+    const select=document.getElementById('accountSelect'), rows=document.getElementById('ledgerRows'), message=document.getElementById('ledgerMessage');
+    let current=null;
+    const num=v=>Number(v||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+    const date=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('fa-IR');};
+    async function loadAccounts(){
+        try{
+            const response=await fetch('/api/accounting/accounts'), data=await response.json();
+            if(!response.ok)throw new Error(data.detail||data.message||'دریافت حساب‌ها ناموفق بود.');
+            select.replaceChildren(new Option('یک حساب انتخاب کنید',''));
+            for(const a of data.filter(x=>x.isActive))select.add(new Option(a.code+' - '+a.title,a.id));
+            if(!data.length)message.textContent='ابتدا حساب‌های موردنیاز را در مدیریت حساب‌ها تعریف کنید.';
+        }catch(e){select.replaceChildren(new Option('دریافت حساب‌ها ناموفق بود',''));message.textContent=e.message||'خطا در دریافت حساب‌ها.';}
+    }
+    async function showLedger(){
+        if(!select.value){message.textContent='لطفاً یک حساب انتخاب کنید.';return;}
+        const from=document.getElementById('fromDate').value,to=document.getElementById('toDate').value;
+        if(from&&to&&from>to){message.textContent='تاریخ شروع نباید بعد از تاریخ پایان باشد.';return;}
+        message.textContent='در حال دریافت گردش حساب…';
+        const qs=new URLSearchParams({accountId:select.value});if(from)qs.set('from',from);if(to)qs.set('to',to);
+        try{
+            const response=await fetch('/api/accounting/reports/general-ledger?'+qs.toString()),data=await response.json();
+            if(!response.ok)throw new Error(data.detail||data.message||'دریافت گردش حساب ناموفق بود.');
+            current=data;document.getElementById('accountSummary').hidden=false;
+            document.getElementById('accountSummary').textContent=data.account.code+' - '+data.account.title;
+            document.getElementById('openingBalance').textContent=num(data.openingBalance)+' ریال '+(data.openingBalance>0?'بدهکار':data.openingBalance<0?'بستانکار':'');
+            document.getElementById('debitTotal').textContent=num(data.debitTotal)+' ریال';
+            document.getElementById('creditTotal').textContent=num(data.creditTotal)+' ریال';
+            document.getElementById('endingBalance').textContent=num(data.endingBalance)+' ریال '+(data.endingBalance>0?'بدهکار':data.endingBalance<0?'بستانکار':'');
+            rows.replaceChildren();
+            for(const line of data.lines){
+                const tr=document.createElement('tr');
+                for(const v of [date(line.documentDate),line.documentNumber||'—',line.documentDescription||'—',line.lineDescription||'—',num(line.debit),num(line.credit),num(line.balance)]){
+                    const td=document.createElement('td');td.textContent=v;tr.appendChild(td);
+                }rows.appendChild(tr);
+            }
+            if(!data.lines.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='برای این حساب و بازه زمانی گردش ثبت‌شده‌ای وجود ندارد.';tr.appendChild(td);rows.appendChild(tr);}
+            message.textContent='تعداد ردیف‌ها: '+data.lines.length.toLocaleString('fa-IR');
+            document.getElementById('exportLedger').disabled=false;
+        }catch(e){current=null;document.getElementById('exportLedger').disabled=true;message.textContent=e.message||'ارتباط با سرور برقرار نشد.';}
+    }
+    function exportCsv(){
+        if(!current)return;
+        const data=[['مانده ابتدای دوره',current.openingBalance],['تاریخ','شماره سند','شرح سند','شرح ردیف','بدهکار','بستانکار','مانده تجمعی'],...current.lines.map(x=>[date(x.documentDate),x.documentNumber||'',x.documentDescription||'',x.lineDescription||'',x.debit,x.credit,x.balance])];
+        const csv='\uFEFF'+data.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n');
+        const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),a=document.createElement('a');
+        a.href=url;a.download='general-ledger-'+current.account.code+'.csv';a.click();URL.revokeObjectURL(url);
+    }
+    document.getElementById('showLedger').addEventListener('click',showLedger);
+    document.getElementById('exportLedger').addEventListener('click',exportCsv);
+    loadAccounts();
+})();
+</script>

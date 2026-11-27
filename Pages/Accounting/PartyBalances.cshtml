@@ -1,0 +1,60 @@
+@page
+@{
+    ViewData["Title"] = "مانده اشخاص";
+}
+<div class="business-page" dir="rtl">
+    <section class="hero">
+        <div><span class="eyebrow">گزارش‌های مالی</span><h1>مانده حساب اشخاص</h1>
+        <p>مانده بدهکار و بستانکار هر مشتری یا تأمین‌کننده بر اساس ردیف‌های اسناد حسابداری ثبت‌نهایی‌شده.</p></div>
+    </section>
+    <section class="panel">
+        <div class="filters">
+            <label>از تاریخ<input id="from" type="date"></label>
+            <label>تا تاریخ<input id="to" type="date"></label>
+            <div class="filter-actions"><button id="load" type="button">تهیه گزارش</button><button id="clear" type="button" class="secondary">کل دوره</button></div>
+        </div>
+        <p id="message" role="status" aria-live="polite"></p>
+        <div class="totals">
+            <div><span>جمع گردش بدهکار</span><strong id="debitTotal">۰</strong></div>
+            <div><span>جمع گردش بستانکار</span><strong id="creditTotal">۰</strong></div>
+            <div><span>مانده‌های بدهکار</span><strong id="debitBalanceTotal">۰</strong></div>
+            <div><span>مانده‌های بستانکار</span><strong id="creditBalanceTotal">۰</strong></div>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>شخص / شرکت</th><th>گردش بدهکار</th><th>گردش بستانکار</th><th>مانده بدهکار</th><th>مانده بستانکار</th><th>تعداد ردیف سند</th></tr></thead><tbody id="rows"><tr><td colspan="6">برای تهیه گزارش، روی «تهیه گزارش» بزنید.</td></tr></tbody></table></div>
+    </section>
+</div>
+<style>
+.business-page{max-width:1400px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.hero{padding:24px 28px;margin-bottom:18px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.hero h1{font-size:25px;margin:9px 0}.hero p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.panel{padding:20px;margin-bottom:18px;background:#fff;border:1px solid #e2eaf4;border-radius:15px}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end}.filters label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#52667e;font-weight:700}.business-page input{min-width:0;padding:10px;border:1px solid #d9e3ef;border-radius:8px;background:#fff;font:inherit;font-size:12px}.filter-actions{display:flex;gap:8px}.business-page button{border:0;border-radius:8px;padding:10px 15px;background:#2677c9;color:white;font:inherit;font-size:12px;cursor:pointer}.business-page button.secondary{background:#edf5ff;color:#2465a5}.totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}.totals div{padding:13px;border:1px solid #e5edf6;border-radius:10px;background:#f8fbff}.totals span,.totals strong{display:block}.totals span{font-size:11px;color:#8292a6}.totals strong{margin-top:8px;font-size:16px}.table-scroll{overflow:auto;margin-top:16px}table{width:100%;border-collapse:collapse;min-width:750px}th,td{padding:11px 9px;text-align:right;border-bottom:1px solid #edf1f6;font-size:12px}th{background:#f7faff;color:#64768b}#message{white-space:pre-wrap;font-size:12px;line-height:1.8}
+@@media(max-width:750px){.filters{grid-template-columns:1fr 1fr}.filter-actions{grid-column:1/-1}.totals{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:13px}.hero{padding:20px}}
+</style>
+<script>
+(() => {
+ const $=id=>document.getElementById(id);
+ const money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2});
+ async function load(){
+   $('message').textContent='در حال تهیه گزارش...';
+   $('rows').replaceChildren();
+   const params=new URLSearchParams();
+   if($('from').value)params.set('from',$('from').value);
+   if($('to').value)params.set('to',$('to').value);
+   try{
+     const response=await fetch('/api/accounting/reports/party-balances'+(params.size?'?'+params.toString():''));
+     const data=await response.json();
+     if(!response.ok)throw new Error(data.message||'تهیه گزارش ناموفق بود.');
+     for(const [id,key] of [['debitTotal','debitTotal'],['creditTotal','creditTotal'],['debitBalanceTotal','debitBalanceTotal'],['creditBalanceTotal','creditBalanceTotal']])$(id).textContent=money(data[key]);
+     if(!data.parties.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=6;td.textContent='برای این بازه، سند ثبت‌نهایی‌شده دارای طرف حساب وجود ندارد.';tr.append(td);$('rows').append(tr);}
+     for(const p of data.parties){
+       const tr=document.createElement('tr');
+       for(const value of [p.partyName,money(p.debit),money(p.credit),money(p.debitBalance),money(p.creditBalance),money(p.documentLines)]){
+         const td=document.createElement('td');td.textContent=value;tr.append(td);
+       }
+       $('rows').append(tr);
+     }
+     $('message').textContent='گزارش با موفقیت تهیه شد.';
+   }catch(error){$('message').textContent=error.message||'خطا در دریافت گزارش.';const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=6;td.textContent='اطلاعات گزارش دریافت نشد.';tr.append(td);$('rows').append(tr);}
+ }
+ $('load').addEventListener('click',load);
+ $('clear').addEventListener('click',()=>{$('from').value='';$('to').value='';load();});
+ load();
+})();
+</script>

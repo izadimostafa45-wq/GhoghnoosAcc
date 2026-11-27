@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GhoghnoosAcc.Models;
 
-public class JournalEntryLine
+public class JournalEntryLine : ITenantOwned
 {
     public int Id { get; set; }
 

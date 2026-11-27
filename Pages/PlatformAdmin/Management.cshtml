@@ -1,0 +1,193 @@
+@page "/PlatformAdmin/Management"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "PlatformAdmin")]
+@{
+    ViewData["Title"] = "مدیریت شرکت‌ها و کاربران";
+}
+<div class="container py-4" dir="rtl" style="max-width:1250px">
+    <section class="p-4 p-md-5 mb-4 rounded-4 border" style="background:linear-gradient(120deg,#f7fbff,#e8f2ff);border-color:#d9e7f7!important">
+        <span class="text-primary fw-bold small">GHOGHNOOS · ADMINISTRATION</span>
+        <h1 class="mt-2 mb-3">مدیریت شرکت‌ها و کاربران</h1>
+        <p class="text-secondary mb-0" style="line-height:2">از این بخش شرکت بسازید، مدیر و کاربران آن را تعریف کنید و برای ورود به اطلاعات حسابداری، شرکت فعال را انتخاب کنید.</p>
+    </section>
+
+    <div id="notice" class="alert d-none" role="status" aria-live="polite"></div>
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <section class="card border-0 shadow-sm h-100"><div class="card-body p-4">
+                <h2 class="h5 mb-3">ایجاد شرکت جدید</h2>
+                <form id="companyForm">
+                    <label for="companyName" class="form-label">نام شرکت</label>
+                    <input id="companyName" class="form-control mb-3" maxlength="160" required placeholder="مثلاً شرکت ققنوس" />
+                    <button id="createCompanyButton" class="btn btn-primary w-100" type="submit">ایجاد شرکت</button>
+                </form>
+            </div></section>
+        </div>
+        <div class="col-lg-8">
+            <section class="card border-0 shadow-sm"><div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                    <h2 class="h5 mb-0">فهرست شرکت‌ها</h2>
+                    <button type="button" id="refreshCompanies" class="btn btn-outline-secondary btn-sm">بازخوانی</button>
+                </div>
+                <div class="table-responsive"><table class="table align-middle">
+                    <thead><tr><th>نام شرکت</th><th>وضعیت</th><th>اعضا</th><th>عملیات</th></tr></thead>
+                    <tbody id="companyRows"><tr><td colspan="4">در حال بارگذاری…</td></tr></tbody>
+                </table></div>
+            </div></section>
+        </div>
+    </div>
+
+    <section class="card border-0 shadow-sm mt-3"><div class="card-body p-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div><h2 class="h5 mb-1">کاربران شرکت انتخاب‌شده</h2><p id="selectedCompanyLabel" class="text-secondary small mb-0">ابتدا یک شرکت را انتخاب کنید.</p></div>
+            <button id="refreshUsers" type="button" class="btn btn-outline-secondary btn-sm" disabled>بازخوانی کاربران</button>
+        </div>
+        <form id="userForm" class="row g-3 border rounded-3 p-3 mb-4">
+            <div class="col-md-4"><label for="userEmail" class="form-label">ایمیل کاربر</label><input id="userEmail" type="email" class="form-control" maxlength="256" required /></div>
+            <div class="col-md-4"><label for="userPassword" class="form-label">رمز عبور اولیه</label><input id="userPassword" type="password" class="form-control" minlength="8" required autocomplete="new-password" /><div class="form-text">حداقل ۸ نویسه؛ سیاست رمز عبور سامانه نیز اعمال می‌شود.</div></div>
+            <div class="col-md-2"><label for="userRole" class="form-label">نقش</label><select id="userRole" class="form-select">
+                <option value="Owner">مالک شرکت</option><option value="Admin">مدیر شرکت</option><option value="Accountant">حسابدار</option><option value="Sales">فروشنده</option><option value="Service">خدمات</option><option value="ReadOnly">فقط مشاهده</option>
+            </select></div>
+            <div class="col-md-2 d-flex align-items-end"><button id="createUserButton" class="btn btn-primary w-100" type="submit" disabled>ایجاد کاربر</button></div>
+        </form>
+        <div class="table-responsive"><table class="table align-middle">
+            <thead><tr><th>ایمیل</th><th>نقش</th><th>وضعیت عضویت</th><th>عملیات</th></tr></thead>
+            <tbody id="userRows"><tr><td colspan="4">شرکتی انتخاب نشده است.</td></tr></tbody>
+        </table></div>
+    </div></section>
+</div>
+<script>
+(() => {
+    const notice = document.getElementById('notice');
+    const companyRows = document.getElementById('companyRows');
+    const userRows = document.getElementById('userRows');
+    const selectedLabel = document.getElementById('selectedCompanyLabel');
+    const userForm = document.getElementById('userForm');
+    let companies = [];
+    let selectedCompanyId = null;
+
+    function showNotice(text, isError = false) {
+        notice.textContent = text || '';
+        notice.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success') + (text ? '' : ' d-none');
+    }
+    async function request(url, options = {}) {
+        const response = await fetch(url, {
+            ...options,
+            headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) }
+        });
+        const text = await response.text();
+        let result = {};
+        if (text.trim()) {
+            try { result = JSON.parse(text); }
+            catch { throw new Error('پاسخ نامعتبر از سرور (' + response.status + ').'); }
+        }
+        if (!response.ok) {
+            const details = Array.isArray(result.errors) ? ' ' + result.errors.join('؛ ') : '';
+            throw new Error((result.message || result.detail || ('خطای سرور ' + response.status)) + details);
+        }
+        return result;
+    }
+    const el = (tag, text) => { const node = document.createElement(tag); node.textContent = text ?? ''; return node; };
+
+    async function loadCompanies() {
+        companyRows.replaceChildren(el('tr', ''));
+        try {
+            companies = await request('/api/platform-admin/companies');
+            companyRows.replaceChildren();
+            if (!companies.length) {
+                const tr = el('tr', ''); const td = el('td', 'هنوز شرکتی ثبت نشده است.'); td.colSpan = 4; tr.appendChild(td); companyRows.appendChild(tr);
+                return;
+            }
+            for (const company of companies) {
+                const tr = el('tr', '');
+                tr.appendChild(el('td', company.name));
+                tr.appendChild(el('td', company.status === 'Active' ? 'فعال' : 'غیرفعال'));
+                tr.appendChild(el('td', String(company.memberCount)));
+                const actions = el('td', '');
+                const select = el('button', 'انتخاب شرکت'); select.type = 'button'; select.className = 'btn btn-primary btn-sm me-1';
+                select.addEventListener('click', () => selectCompany(company));
+                const manage = el('button', 'کاربران'); manage.type = 'button'; manage.className = 'btn btn-outline-secondary btn-sm me-1';
+                manage.addEventListener('click', () => loadUsers(company));
+                const rename = el('button', 'ویرایش نام'); rename.type = 'button'; rename.className = 'btn btn-outline-secondary btn-sm me-1 mt-1';
+                rename.addEventListener('click', async () => {
+                    const name = prompt('نام شرکت', company.name); if (name === null || !name.trim()) return;
+                    try { await request('/api/platform-admin/companies/' + company.id, { method: 'PUT', body: JSON.stringify({ name }) }); showNotice('نام شرکت به‌روزرسانی شد.'); await loadCompanies(); }
+                    catch (e) { showNotice(e.message, true); }
+                });
+                const toggle = el('button', company.status === 'Active' ? 'غیرفعال‌کردن' : 'فعال‌کردن'); toggle.type = 'button'; toggle.className = 'btn btn-outline-danger btn-sm mt-1';
+                toggle.addEventListener('click', async () => {
+                    if (!confirm('وضعیت شرکت «' + company.name + '» تغییر کند؟')) return;
+                    try { await request('/api/platform-admin/companies/' + company.id + '/toggle-status', { method: 'POST' }); showNotice('وضعیت شرکت تغییر کرد.'); await loadCompanies(); }
+                    catch (e) { showNotice(e.message, true); }
+                });
+                actions.append(select, manage, rename, toggle); tr.appendChild(actions); companyRows.appendChild(tr);
+            }
+        } catch (e) { companyRows.replaceChildren(); const tr=el('tr','');const td=el('td',e.message);td.colSpan=4;tr.appendChild(td);companyRows.appendChild(tr);showNotice(e.message,true); }
+    }
+
+    async function selectCompany(company) {
+        try {
+            await request('/api/platform-admin/companies/' + company.id + '/select', { method: 'POST' });
+            showNotice('شرکت «' + company.name + '» انتخاب شد؛ در حال انتقال به داشبورد شرکت…');
+            window.location.assign('/Index');
+        } catch (e) { showNotice(e.message, true); }
+    }
+
+    async function loadUsers(company) {
+        selectedCompanyId = company.id;
+        selectedLabel.textContent = 'شرکت: ' + company.name;
+        document.getElementById('createUserButton').disabled = company.status !== 'Active';
+        document.getElementById('refreshUsers').disabled = false;
+        userRows.replaceChildren();
+        try {
+            const users = await request('/api/platform-admin/companies/' + company.id + '/users');
+            if (!users.length) { const tr=el('tr','');const td=el('td','برای این شرکت هنوز کاربری تعریف نشده است.');td.colSpan=4;tr.appendChild(td);userRows.appendChild(tr);return; }
+            for (const user of users) {
+                const tr=el('tr','');
+                tr.appendChild(el('td', user.email || user.userName || '—'));
+                const roles={Owner:'مالک شرکت',Admin:'مدیر شرکت',Accountant:'حسابدار',Sales:'فروشنده',Service:'خدمات',ReadOnly:'فقط مشاهده'};
+                const roleCell=el('td',''); const roleSelect=document.createElement('select'); roleSelect.className='form-select form-select-sm';
+                for(const [value,label] of Object.entries(roles)){const option=el('option',label);option.value=value;option.selected=value===user.role;roleSelect.appendChild(option);}
+                roleCell.appendChild(roleSelect);tr.appendChild(roleCell);
+                tr.appendChild(el('td',user.isActive?'فعال':'غیرفعال'));
+                const td=el('td',''); const saveRole=el('button','ذخیره نقش');saveRole.type='button';saveRole.className='btn btn-outline-primary btn-sm me-1';
+                saveRole.addEventListener('click',async()=>{
+                    try{await request('/api/platform-admin/companies/'+company.id+'/users/'+user.id+'/role',{method:'PUT',body:JSON.stringify({role:roleSelect.value})});showNotice('نقش کاربر به‌روزرسانی شد.');}
+                    catch(e){showNotice(e.message,true);}
+                });
+                const toggle=el('button',user.isActive?'غیرفعال‌کردن عضویت':'فعال‌کردن عضویت');
+                toggle.type='button';toggle.className='btn btn-outline-secondary btn-sm mt-1';
+                toggle.addEventListener('click',async()=>{
+                    try{await request('/api/platform-admin/companies/'+company.id+'/users/'+user.id+'/toggle-active',{method:'POST'});showNotice('وضعیت عضویت تغییر کرد.');await loadUsers(company);}
+                    catch(e){showNotice(e.message,true);}
+                });
+                td.append(saveRole,toggle);tr.appendChild(td);userRows.appendChild(tr);
+            }
+        } catch(e) { showNotice(e.message,true); }
+    }
+
+    document.getElementById('companyForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const button=document.getElementById('createCompanyButton');button.disabled=true;
+        try {
+            const name=document.getElementById('companyName').value.trim();
+            await request('/api/platform-admin/companies',{method:'POST',body:JSON.stringify({name})});
+            document.getElementById('companyName').value='';showNotice('شرکت با موفقیت ایجاد شد.');await loadCompanies();
+        } catch(e) { showNotice(e.message,true); }
+        finally { button.disabled=false; }
+    });
+    userForm.addEventListener('submit', async event => {
+        event.preventDefault(); if(!selectedCompanyId){showNotice('ابتدا شرکت را انتخاب کنید.',true);return;}
+        const button=document.getElementById('createUserButton');button.disabled=true;
+        try {
+            const payload={email:document.getElementById('userEmail').value.trim(),password:document.getElementById('userPassword').value,role:document.getElementById('userRole').value};
+            await request('/api/platform-admin/companies/'+selectedCompanyId+'/users',{method:'POST',body:JSON.stringify(payload)});
+            document.getElementById('userEmail').value='';document.getElementById('userPassword').value='';
+            showNotice('کاربر ایجاد شد و به شرکت اختصاص یافت.');const company=companies.find(x=>x.id===selectedCompanyId);if(company)await loadUsers(company);await loadCompanies();
+        } catch(e) { showNotice(e.message,true); }
+        finally { button.disabled=!selectedCompanyId; }
+    });
+    document.getElementById('refreshCompanies').addEventListener('click',loadCompanies);
+    document.getElementById('refreshUsers').addEventListener('click',()=>{const c=companies.find(x=>x.id===selectedCompanyId);if(c)loadUsers(c);});
+    loadCompanies();
+})();
+</script>

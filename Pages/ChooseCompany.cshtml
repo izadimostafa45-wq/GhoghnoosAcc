@@ -1,0 +1,43 @@
+@page "/ChooseCompany"
+@{
+    ViewData["Title"] = "انتخاب شرکت";
+}
+<div class="container py-4" dir="rtl" style="max-width:900px">
+    <section class="p-4 p-md-5 mb-4 rounded-4 border" style="background:linear-gradient(120deg,#f7fbff,#e8f2ff);border-color:#d9e7f7!important">
+        <span class="text-primary fw-bold small">GHOGHNOOS · WORKSPACE</span>
+        <h1 class="mt-2 mb-3">انتخاب شرکت</h1>
+        <p class="text-secondary mb-0" style="line-height:2">برای ورود به اطلاعات حسابداری، یکی از شرکت‌هایی را انتخاب کنید که عضویت فعال آن را دارید.</p>
+    </section>
+    <div id="workspaceMessage" class="alert d-none" role="status" aria-live="polite"></div>
+    <div id="workspaceList" class="row g-3"><div class="col-12 text-secondary">در حال بارگذاری شرکت‌ها…</div></div>
+</div>
+<script>
+(() => {
+    const list=document.getElementById('workspaceList'),message=document.getElementById('workspaceMessage');
+    function notify(text,error=false){message.textContent=text;message.className='alert '+(error?'alert-danger':'alert-success')+(text?'':' d-none');}
+    async function request(url,options={}){
+        const response=await fetch(url,{...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
+        const text=await response.text();let data={};
+        if(text.trim()){try{data=JSON.parse(text)}catch{throw new Error('پاسخ نامعتبر از سرور ('+response.status+').')}}
+        if(!response.ok)throw new Error(data.message||data.detail||('خطای سرور '+response.status));
+        return data;
+    }
+    async function load(){
+        try{
+            const workspaces=await request('/api/workspaces');list.replaceChildren();
+            if(!workspaces.length){const col=document.createElement('div');col.className='col-12';col.textContent='هیچ عضویت فعالی پیدا نشد. از مدیر کل سامانه بخواهید شما را به یک شرکت اختصاص دهد.';list.appendChild(col);return;}
+            for(const workspace of workspaces){
+                const col=document.createElement('div');col.className='col-md-6';
+                const card=document.createElement('section');card.className='card border-0 shadow-sm h-100';
+                const body=document.createElement('div');body.className='card-body p-4';
+                const title=document.createElement('h2');title.className='h5';title.textContent=workspace.name;
+                const role=document.createElement('p');role.className='text-secondary small';const roles={Owner:'مالک شرکت',Admin:'مدیر شرکت',Accountant:'حسابدار',Sales:'فروشنده',Service:'خدمات',ReadOnly:'فقط مشاهده'};role.textContent='نقش شما: '+(roles[workspace.role]||workspace.role);
+                const button=document.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent='ورود به شرکت';
+                button.addEventListener('click',async()=>{button.disabled=true;try{await request('/api/workspaces/'+workspace.tenantId+'/select',{method:'POST'});window.location.assign('/Index');}catch(e){notify(e.message,true);button.disabled=false;}});
+                body.append(title,role,button);card.appendChild(body);col.appendChild(card);list.appendChild(col);
+            }
+        }catch(e){list.replaceChildren();notify(e.message,true);}
+    }
+    load();
+})();
+</script>

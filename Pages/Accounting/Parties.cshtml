@@ -1,0 +1,114 @@
+@page
+@{
+    ViewData["Title"] = "مدیریت اشخاص";
+}
+<div class="parties-page" dir="rtl">
+    <section class="page-intro">
+        <div><span class="eyebrow">اطلاعات پایه</span><h1>مدیریت اشخاص</h1><p>مشتریان، تأمین‌کنندگان و سایر طرف‌های حساب شرکت را ثبت کنید.</p></div>
+        <span class="intro-symbol" aria-hidden="true">♙</span>
+    </section>
+    <section class="parties-grid">
+        <form id="partyForm" class="panel party-form">
+            <h2>ثبت شخص جدید</h2>
+            <label for="name">نام شخص یا شرکت <span>*</span></label>
+            <input id="name" required maxlength="200" placeholder="نام شخص یا شرکت" />
+            <label for="phone">شماره تماس</label>
+            <input id="phone" maxlength="30" inputmode="tel" placeholder="شماره تماس" />
+            <label for="address">نشانی</label>
+            <textarea id="address" maxlength="300" rows="3" placeholder="نشانی"></textarea>
+            <button type="submit" id="saveParty">ثبت شخص</button>
+            <p id="partyMessage" role="status" aria-live="polite"></p>
+        </form>
+        <section class="panel party-list">
+            <div class="list-heading"><div><h2>فهرست اشخاص</h2><p id="partyCount">در حال بارگذاری…</p></div><button type="button" class="refresh-button" id="refreshParties">بازخوانی</button></div>
+            <label class="search-box" for="partySearch"><span aria-hidden="true">⌕</span><input id="partySearch" type="search" placeholder="جست‌وجو در نام، تلفن یا نشانی" /></label>
+            <div class="table-scroll"><table><thead><tr><th>نام</th><th>شماره تماس</th><th>نشانی</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="partyRows"><tr><td colspan="4">در حال دریافت اطلاعات…</td></tr></tbody></table></div>
+            <p id="emptyState" class="empty-state" hidden>موردی برای نمایش پیدا نشد.</p>
+        </section>
+    </section>
+</div>
+<style>
+.parties-page{max-width:1400px;margin:auto;color:#20334b;font-family:Tahoma,Arial,sans-serif}.page-intro{display:flex;align-items:center;justify-content:space-between;padding:26px 30px;margin-bottom:20px;border:1px solid #dbe9f8;border-radius:17px;background:linear-gradient(110deg,#fff,#eaf4ff)}.eyebrow{font-size:11px;color:#2677c9;font-weight:700}.page-intro h1{font-size:26px;margin:9px 0}.page-intro p{margin:0;color:#74859a;font-size:12px;line-height:1.9}.intro-symbol{display:grid;place-items:center;width:70px;height:70px;border-radius:20px;background:#d8eaff;color:#2677c9;font-size:36px}.parties-grid{display:grid;grid-template-columns:minmax(260px,.7fr) minmax(0,1.5fr);gap:18px}.panel{background:#fff;border:1px solid #e2eaf4;border-radius:15px;padding:22px;min-width:0}.panel h2{font-size:16px;margin:0 0 8px}.party-form{display:flex;flex-direction:column;gap:10px;align-self:start}.party-form h2{margin-bottom:8px}.party-form label{font-size:12px;font-weight:700;color:#53657a;margin-top:6px}.party-form label span{color:#dc4d5a}.party-form input,.party-form textarea,.search-box input{font:inherit;font-size:12px;border:1px solid #d7e1ed;border-radius:9px;padding:12px;background:#fff;min-width:0;width:100%;outline:none}.party-form input:focus,.party-form textarea:focus,.search-box input:focus{border-color:#6da8e8;box-shadow:0 0 0 3px #2677c915}.party-form textarea{resize:vertical}.party-form button,.refresh-button{border:0;border-radius:9px;padding:11px 16px;background:#2677c9;color:#fff;font:inherit;font-size:12px;cursor:pointer}.party-form button{margin-top:8px}.party-form button:disabled{opacity:.6;cursor:wait}#partyMessage{margin:0;color:#60758d;font-size:11px;line-height:1.8;white-space:pre-wrap}.list-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.list-heading p{margin:5px 0 0;color:#8494a8;font-size:11px}.refresh-button{background:#edf5ff;color:#2465a5}.search-box{display:flex;align-items:center;gap:8px;border:1px solid #e0e8f1;border-radius:10px;padding:0 10px;margin-bottom:14px;color:#8ba0b6}.search-box input{border:0;box-shadow:none!important;padding-inline:3px}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:440px}th,td{padding:13px 10px;text-align:right;border-bottom:1px solid #edf1f6;font-size:11px;line-height:1.8}th{background:#f7faff;color:#64768b;font-weight:700}td{color:#435970;overflow-wrap:anywhere}.active-pill{display:inline-block;padding:4px 9px;border-radius:999px;background:#e6f8ef;color:#16865e;font-size:10px}.empty-state{padding:25px;text-align:center;color:#8a9aae;font-size:12px}.empty-state[hidden]{display:none}@@media(max-width:900px){.parties-grid{grid-template-columns:1fr}}@@media(max-width:600px){.page-intro{padding:20px}.page-intro h1{font-size:22px}.intro-symbol{width:52px;height:52px;font-size:27px}.panel{padding:15px}}
+</style>
+<script>
+(() => {
+    const form = document.getElementById('partyForm'), message = document.getElementById('partyMessage');
+    const rows = document.getElementById('partyRows'), search = document.getElementById('partySearch');
+    const count = document.getElementById('partyCount'), empty = document.getElementById('emptyState');
+    let parties = [];
+    const safe = value => String(value ?? '');
+    async function readResponse(response) {
+        const body = await response.text();
+        if (!body.trim()) {
+            if (response.status === 403) return { detail: 'دسترسی به اطلاعات اشخاص رد شد. برای ادامه، با حساب دارای عضویت معتبر در شرکت وارد شوید.' };
+            if (response.status === 401) return { detail: 'نشست شما منقضی شده است؛ دوباره وارد سامانه شوید.' };
+            return { detail: response.ok ? 'سرور پاسخ خالی برگرداند.' : 'خطای سرور (' + response.status + ').' };
+        }
+        try { return JSON.parse(body); }
+        catch { return { detail: 'پاسخ سرور معتبر نیست (' + response.status + ').' }; }
+    }
+    function render() {
+        const q = search.value.trim().toLocaleLowerCase();
+        const filtered = parties.filter(p => [p.name,p.phone,p.address].some(v => safe(v).toLocaleLowerCase().includes(q)));
+        rows.replaceChildren();
+        for (const party of filtered) {
+            const tr = document.createElement('tr');
+            for (const value of [party.name, party.phone || '—', party.address || '—']) {
+                const td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+            }
+            const status = document.createElement('td'), pill = document.createElement('span');
+            pill.className = 'active-pill'; pill.textContent = party.isActive ? 'فعال' : 'غیرفعال';
+            status.appendChild(pill); tr.appendChild(status);
+            const actions = document.createElement('td');
+            const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'ویرایش'; edit.className = 'refresh-button';
+            edit.addEventListener('click', async () => {
+                const name = prompt('نام شخص یا شرکت', party.name); if (name === null) return;
+                const phone = prompt('شماره تماس', party.phone || ''); if (phone === null) return;
+                const address = prompt('نشانی', party.address || ''); if (address === null) return;
+                try {
+                    const response = await fetch('/api/accounting/parties/' + party.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,address})});
+                    const result = await readResponse(response); if (!response.ok) throw new Error(result.message || result.detail || 'ویرایش ناموفق بود.');
+                    message.textContent = 'اطلاعات شخص به‌روزرسانی شد.'; await load();
+                } catch (error) { message.textContent = error.message || 'ویرایش ناموفق بود.'; }
+            });
+            const toggle = document.createElement('button'); toggle.type = 'button'; toggle.textContent = party.isActive ? 'غیرفعال‌کردن' : 'فعال‌کردن'; toggle.className = 'refresh-button'; toggle.style.marginInlineStart = '6px';
+            toggle.addEventListener('click', async () => {
+                if (!confirm('وضعیت این شخص تغییر کند؟')) return;
+                try {
+                    const response = await fetch('/api/accounting/parties/' + party.id + '/toggle-active', {method:'POST'});
+                    const result = await readResponse(response); if (!response.ok) throw new Error(result.message || result.detail || 'تغییر وضعیت ناموفق بود.');
+                    message.textContent = result.message || 'وضعیت تغییر کرد.'; await load();
+                } catch (error) { message.textContent = error.message || 'تغییر وضعیت ناموفق بود.'; }
+            });
+            actions.append(edit, toggle); tr.appendChild(actions); rows.appendChild(tr);
+        }
+        count.textContent = filtered.length.toLocaleString('fa-IR') + ' مورد';
+        empty.hidden = filtered.length !== 0;
+        if (!filtered.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 5; td.textContent = ' '; tr.appendChild(td); rows.appendChild(tr); }
+    }
+    async function load() {
+        count.textContent = 'در حال بارگذاری…';
+        try {
+            const response = await fetch('/api/accounting/parties'), data = await readResponse(response);
+            if (!response.ok) throw new Error(data.detail || data.message || 'دریافت فهرست اشخاص ناموفق بود.');
+            parties = data; render();
+        } catch (error) {
+            count.textContent = 'خطا در دریافت اطلاعات'; rows.replaceChildren();
+            const tr = document.createElement('tr'), td = document.createElement('td');
+            td.colSpan = 4; td.textContent = error.message || 'ارتباط با سرور برقرار نشد.'; tr.appendChild(td); rows.appendChild(tr);
+        }
+    }
+    form.addEventListener('submit', async event => {
+        event.preventDefault(); const button = document.getElementById('saveParty');
+        button.disabled = true; message.textContent = 'در حال ثبت…';
+        try {
+            const response = await fetch('/api/accounting/parties', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('name').value.trim(),phone:document.getElementById('phone').value.trim(),address:document.getElementById('address').value.trim()})});
+            const data = await readResponse(response);
+            if (!response.ok) throw new Error(data.detail || data.message || 'ثبت شخص ناموفق بود.');
+            form.reset(); message.textContent = 'شخص با موفقیت ثبت شد.'; await load();
+        } catch (error) { message.textContent = error.message || 'ارتباط با سرور برقرار نشد.'; }
+        finally { button.disabled = false; }
+    });
+    search.addEventListener('input', render); document.getElementById('refreshParties').addEventListener('click', load); load();
+})();
+</script>

@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace GhoghnoosAcc.Models;
 
-public class Account
+public class Account : ITenantOwned
 {
     public int Id { get; set; }
 
