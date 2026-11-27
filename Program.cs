@@ -1089,7 +1089,11 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
         request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
+        x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
+        x.UnitPrice < 0 || decimal.Round(x.UnitPrice, 2) != x.UnitPrice ||
+        x.Discount < 0 || decimal.Round(x.Discount, 2) != x.Discount ||
+        x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) ||
+        x.TaxRate < 0 || decimal.Round(x.TaxRate, 2) != x.TaxRate || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
@@ -1138,7 +1142,11 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
         request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
+        x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
+        x.UnitPrice < 0 || decimal.Round(x.UnitPrice, 2) != x.UnitPrice ||
+        x.Discount < 0 || decimal.Round(x.Discount, 2) != x.Discount ||
+        x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) ||
+        x.TaxRate < 0 || decimal.Round(x.TaxRate, 2) != x.TaxRate || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
