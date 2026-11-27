@@ -36,10 +36,14 @@ public static class AssistantInvoiceDraftEndpoint
                 line.Description.Trim().Length > 200 ||
                 line.Quantity <= 0 ||
                 line.Quantity > 1_000_000_000m ||
+                HasScale(line.Quantity, 3) ||
                 line.UnitPrice < 0 ||
                 line.UnitPrice > 1_000_000_000_000m ||
+                HasScale(line.UnitPrice, 2) ||
                 line.Discount < 0 ||
-                line.TaxRate < 0 || line.TaxRate > 100))
+                HasScale(line.Discount, 2) ||
+                line.TaxRate < 0 || line.TaxRate > 100 ||
+                HasScale(line.TaxRate, 2)))
                 return Results.BadRequest(new { message = "تعداد، قیمت، تخفیف یا مالیات یکی از ردیف‌ها معتبر نیست." });
 
             var matchingParties = await db.Parties.AsNoTracking()
@@ -136,6 +140,13 @@ public static class AssistantInvoiceDraftEndpoint
                 message = "پیش‌نویس فاکتور ساخته شد؛ ثبت نهایی و سند حسابداری ایجاد نشده است."
             });
         }).RequireAuthorization("TenantWrite");
+    }
+
+    private static bool HasScale(decimal value, int maxScale)
+    {
+        var bits = decimal.GetBits(value);
+        var scale = (bits[3] >> 16) & 0x7F;
+        return scale > maxScale;
     }
 }
 
