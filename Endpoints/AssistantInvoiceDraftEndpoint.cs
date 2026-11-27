@@ -71,10 +71,17 @@ public static class AssistantInvoiceDraftEndpoint
             var lines = request.Lines.Select(item =>
             {
                 var gross = decimal.Round(item.Quantity * item.UnitPrice, 2, MidpointRounding.AwayFromZero);
-                if (item.Discount > gross)
+                if (item.Discount > gross || !InvoiceDecimalPrecision.FitsNumeric18_2(gross))
                     return null;
+
                 var subtotal = gross - item.Discount;
                 var tax = decimal.Round(subtotal * item.TaxRate / 100m, 2, MidpointRounding.AwayFromZero);
+                var total = subtotal + tax;
+                if (!InvoiceDecimalPrecision.FitsNumeric18_2(subtotal) ||
+                    !InvoiceDecimalPrecision.FitsNumeric18_2(tax) ||
+                    !InvoiceDecimalPrecision.FitsNumeric18_2(total))
+                    return null;
+
                 return new InvoiceLine
                 {
                     TenantId = tenantId,
@@ -85,12 +92,27 @@ public static class AssistantInvoiceDraftEndpoint
                     TaxRate = item.TaxRate,
                     LineSubtotal = subtotal,
                     LineTax = tax,
-                    LineTotal = subtotal + tax
+                    LineTotal = total
                 };
             }).ToList();
 
             if (lines.Any(line => line is null))
-                return Results.BadRequest(new { message = "تخفیف هیچ ردیفی نمی‌تواند از مبلغ همان ردیف بیشتر باشد." });
+                return Results.BadRequest(new
+                {
+                    message = "تخفیف نباید از مبلغ ردیف بیشتر باشد و مبلغ‌های محاسبه‌شده باید در محدوده مجاز دیتابیس باشند."
+                });
+
+            var invoiceLines = lines.Select(line => line!).ToList();
+            var invoiceSubtotal = invoiceLines.Sum(line => line.LineSubtotal);
+            var invoiceTaxTotal = invoiceLines.Sum(line => line.LineTax);
+            var invoiceTotal = invoiceLines.Sum(line => line.LineTotal);
+            if (!InvoiceDecimalPrecision.FitsNumeric18_2(invoiceSubtotal) ||
+                !InvoiceDecimalPrecision.FitsNumeric18_2(invoiceTaxTotal) ||
+                !InvoiceDecimalPrecision.FitsNumeric18_2(invoiceTotal))
+                return Results.BadRequest(new
+                {
+                    message = "مجموع فاکتور از سقف مبلغ قابل ذخیره در دیتابیس بیشتر است؛ تعداد یا مبلغ ردیف‌ها را کاهش دهید."
+                });
 
             var invoiceDate = (request.InvoiceDate ?? DateTime.UtcNow).Date;
             var number = string.IsNullOrWhiteSpace(request.Number)
@@ -101,7 +123,6 @@ public static class AssistantInvoiceDraftEndpoint
             if (await db.Invoices.AnyAsync(i => i.TenantId == tenantId && i.Number == number))
                 return Results.Conflict(new { code = "invoice_number_exists", message = "شماره فاکتور تکراری است؛ شماره دیگری تعیین کنید.", number });
 
-            var invoiceLines = lines.Select(line => line!).ToList();
             var invoice = new Invoice
             {
                 TenantId = tenantId,
@@ -112,9 +133,9 @@ public static class AssistantInvoiceDraftEndpoint
                 PartyId = matchingParties[0].Id,
                 Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
                 Lines = invoiceLines,
-                Subtotal = invoiceLines.Sum(line => line.LineSubtotal),
-                TaxTotal = invoiceLines.Sum(line => line.LineTax),
-                Total = invoiceLines.Sum(line => line.LineTotal)
+                Subtotal = invoiceSubtotal,
+                TaxTotal = invoiceTaxTotal,
+                Total = invoiceTotal
             };
 
             db.Invoices.Add(invoice);
@@ -141,7 +162,6 @@ public static class AssistantInvoiceDraftEndpoint
             });
         }).RequireAuthorization("TenantWrite");
     }
-
 }
 
 public sealed record AssistantInvoiceDraftRequest(
