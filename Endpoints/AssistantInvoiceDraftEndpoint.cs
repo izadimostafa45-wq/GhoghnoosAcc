@@ -139,7 +139,24 @@ public static class AssistantInvoiceDraftEndpoint
             };
 
             db.Invoices.Add(invoice);
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (
+                ex.GetBaseException() is Npgsql.PostgresException postgresException &&
+                postgresException.SqlState == Npgsql.PostgresErrorCodes.UniqueViolation &&
+                postgresException.ConstraintName == "IX_Invoices_TenantId_Number")
+            {
+                // The pre-check above improves the normal response, but concurrent requests can
+                // still race. The database unique index is authoritative.
+                return Results.Conflict(new
+                {
+                    code = "invoice_number_exists",
+                    message = "شماره فاکتور تکراری است؛ شماره دیگری تعیین کنید.",
+                    number
+                });
+            }
 
             return Results.Created($"/api/accounting/invoices/{invoice.Id}", new
             {
