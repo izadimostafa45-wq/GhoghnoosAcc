@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using GhoghnoosAcc.Data;
+using GhoghnoosAcc.Endpoints;
 using GhoghnoosAcc.Models;
 using GhoghnoosAcc.Services;
 using Microsoft.EntityFrameworkCore;
@@ -360,6 +361,7 @@ workspaceApi.MapPost("/{tenantId:guid}/select", async (
 var accountingApi = app.MapGroup("/api/accounting")
     .RequireAuthorization("TenantRequired")
     .RequireAuthorization("TenantRead");
+accountingApi.MapAssistantInvoiceDraftEndpoint();
 
 accountingApi.MapGet("/accounts", async Task<IResult> (IServiceProvider services, ITenantContext tenantContext) =>
 {
