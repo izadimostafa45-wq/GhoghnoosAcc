@@ -43,3 +43,22 @@ Do not configure a ChatGPT Action until all of the following are true:
 ## Current blockers outside GitHub
 
 GitHub changes alone cannot create a public HTTPS deployment, provision production secrets, or complete an OAuth authorization flow with the target ChatGPT integration. Those require a chosen hosting environment, production configuration, and a later end-to-end verification. Do not put secrets in this repository or in chat.
+
+## Repository inspection findings (2026-11-27)
+
+- `Program.cs` configures ASP.NET Core Identity cookie authentication and maps the invoice-draft endpoint under the tenant-protected accounting route group.
+- The draft endpoint requires `TenantWrite` and resolves tenant scope from `ITenantContext`; this is a useful same-application authorization boundary, but it is not a remote ChatGPT OAuth/API authentication implementation.
+- The repository contains a test project at `tests/GhoghnoosAcc.Tests/GhoghnoosAcc.Tests.csproj`, and the CI workflow restores and tests that project.
+- Do not add an authentication scheme that silently falls back to anonymous access, accepts tenant IDs from requests, or treats an arbitrary static secret as a user identity.
+
+## Implementation acceptance criteria
+
+The remote authentication implementation is not complete until it has:
+- A concrete, supported OAuth configuration for the chosen ChatGPT integration surface, including issuer/authorization endpoint, token endpoint, client registration, redirect URI, scopes, and token validation.
+- A server-side mapping from the validated OAuth subject to an application user and active tenant membership. Missing or ambiguous mappings must fail closed.
+- Explicit authorization for draft creation on every request; read-only or revoked membership must not be able to create drafts.
+- Automated tests for missing, invalid, expired, and wrong-audience tokens; inactive tenant and revoked membership; cross-tenant party names; and draft-only behavior.
+- Successful CI for the exact resulting commit.
+
+The GitHub repository does not currently provide the public deployment origin or OAuth client registration needed to complete an end-to-end connection. Those values must be configured in the hosting provider and ChatGPT integration settings, not committed here.
+
