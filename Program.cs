@@ -382,12 +382,17 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
-    if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Title))
-        return Results.BadRequest(new { message = "Account code and title are required." });
+    var code = request.Code?.Trim();
+    var title = request.Title?.Trim();
+    var type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim();
+    var allowedTypes = new[] { "General", "Asset", "Liability", "Equity", "Revenue", "Expense" };
+    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 ||
+        string.IsNullOrWhiteSpace(title) || title.Length > 200)
+        return Results.BadRequest(new { message = "کد حساب باید حداکثر ۳۰ نویسه و عنوان حداکثر ۲۰۰ نویسه باشد." });
+    if (!allowedTypes.Contains(type, StringComparer.Ordinal))
+        return Results.BadRequest(new { message = "نوع حساب انتخاب‌شده معتبر نیست." });
 
     var db = services.GetRequiredService<AppDbContext>();
-    var code = request.Code.Trim();
-    var title = request.Title.Trim();
     if (await db.Accounts.ForTenant(tenantId).AnyAsync(x => x.Code == code))
         return Results.Conflict(new { message = "An account with this code already exists." });
 
@@ -396,7 +401,7 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         TenantId = tenantId,
         Code = code,
         Title = title,
-        Type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim(),
+        Type = type,
         IsActive = true
     };
     db.Accounts.Add(account);
@@ -412,7 +417,10 @@ accountingApi.MapPut("/accounts/{id:int}", async Task<IResult> (int id, UpdateAc
     var code = request.Code?.Trim();
     var title = request.Title?.Trim();
     var type = request.Type?.Trim();
-    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 || string.IsNullOrWhiteSpace(title) || title.Length > 200 || string.IsNullOrWhiteSpace(type) || type.Length > 30)
+    var allowedTypes = new[] { "General", "Asset", "Liability", "Equity", "Revenue", "Expense" };
+    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 ||
+        string.IsNullOrWhiteSpace(title) || title.Length > 200 ||
+        string.IsNullOrWhiteSpace(type) || !allowedTypes.Contains(type, StringComparer.Ordinal))
         return Results.BadRequest(new { message = "کد، عنوان و نوع حساب را به‌درستی وارد کنید." });
     var db = services.GetRequiredService<AppDbContext>();
     var account = await db.Accounts.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
