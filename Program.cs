@@ -382,12 +382,17 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         return Results.Forbid();
     if (string.IsNullOrWhiteSpace(connectionString))
         return Results.Problem("PostgreSQL is not configured. Set ConnectionStrings:DefaultConnection.", statusCode: 503);
-    if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Title))
-        return Results.BadRequest(new { message = "Account code and title are required." });
+    var code = request.Code?.Trim();
+    var title = request.Title?.Trim();
+    var type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim();
+    var allowedTypes = new[] { "General", "Asset", "Liability", "Equity", "Revenue", "Expense" };
+    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 ||
+        string.IsNullOrWhiteSpace(title) || title.Length > 200)
+        return Results.BadRequest(new { message = "کد حساب باید حداکثر ۳۰ نویسه و عنوان حداکثر ۲۰۰ نویسه باشد." });
+    if (!allowedTypes.Contains(type, StringComparer.Ordinal))
+        return Results.BadRequest(new { message = "نوع حساب انتخاب‌شده معتبر نیست." });
 
     var db = services.GetRequiredService<AppDbContext>();
-    var code = request.Code.Trim();
-    var title = request.Title.Trim();
     if (await db.Accounts.ForTenant(tenantId).AnyAsync(x => x.Code == code))
         return Results.Conflict(new { message = "An account with this code already exists." });
 
@@ -396,7 +401,7 @@ accountingApi.MapPost("/accounts", async Task<IResult> (CreateAccountRequest req
         TenantId = tenantId,
         Code = code,
         Title = title,
-        Type = string.IsNullOrWhiteSpace(request.Type) ? "General" : request.Type.Trim(),
+        Type = type,
         IsActive = true
     };
     db.Accounts.Add(account);
@@ -412,7 +417,10 @@ accountingApi.MapPut("/accounts/{id:int}", async Task<IResult> (int id, UpdateAc
     var code = request.Code?.Trim();
     var title = request.Title?.Trim();
     var type = request.Type?.Trim();
-    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 || string.IsNullOrWhiteSpace(title) || title.Length > 200 || string.IsNullOrWhiteSpace(type) || type.Length > 30)
+    var allowedTypes = new[] { "General", "Asset", "Liability", "Equity", "Revenue", "Expense" };
+    if (string.IsNullOrWhiteSpace(code) || code.Length > 30 ||
+        string.IsNullOrWhiteSpace(title) || title.Length > 200 ||
+        string.IsNullOrWhiteSpace(type) || !allowedTypes.Contains(type, StringComparer.Ordinal))
         return Results.BadRequest(new { message = "کد، عنوان و نوع حساب را به‌درستی وارد کنید." });
     var db = services.GetRequiredService<AppDbContext>();
     var account = await db.Accounts.ForTenant(tenantId).FirstOrDefaultAsync(x => x.Id == id);
@@ -484,10 +492,27 @@ accountingApi.MapPost("/entries", async Task<IResult> (
         .Where(x => x.IsActive && (names.Contains(x.Code) || names.Contains(x.Title)))
         .ToListAsync();
 
-    var accountMap = accounts
+    var accountAliases = accounts
         .SelectMany(a => new[] { (Key: a.Code, Account: a), (Key: a.Title, Account: a) })
         .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(g => g.Key, g => g.First().Account, StringComparer.OrdinalIgnoreCase);
+        .ToList();
+
+    // Never silently map a journal line to an arbitrary account when one account's
+    // code collides with another account's title (or two titles collide).
+    var ambiguousAliases = accountAliases
+        .Where(group => group.Select(x => x.Account.Id).Distinct().Count() > 1)
+        .Select(group => group.Key)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var ambiguousRequested = names.Where(name => ambiguousAliases.Contains(name)).ToList();
+    if (ambiguousRequested.Count > 0)
+        return Results.BadRequest(new
+        {
+            message = "A journal line matches more than one account. Use a unique account code or resolve duplicate account names.",
+            ambiguousAccounts = ambiguousRequested
+        });
+
+    var accountMap = accountAliases
+        .ToDictionary(group => group.Key, group => group.First().Account, StringComparer.OrdinalIgnoreCase);
 
     var missing = names.Where(name => !accountMap.ContainsKey(name)).ToList();
     if (missing.Count > 0)
@@ -1085,11 +1110,16 @@ accountingApi.MapPost("/invoices", async Task<IResult> (InvoiceCreateRequest req
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
-        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
+        x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
+        x.UnitPrice < 0 || decimal.Round(x.UnitPrice, 2) != x.UnitPrice ||
+        x.Discount < 0 || decimal.Round(x.Discount, 2) != x.Discount ||
+        x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) ||
+        x.TaxRate < 0 || decimal.Round(x.TaxRate, 2) != x.TaxRate || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     if (!await db.Parties.ForTenant(tenantId).AnyAsync(x => x.Id == request.PartyId && x.IsActive))
@@ -1134,11 +1164,16 @@ accountingApi.MapPut("/invoices/{id:int}", async Task<IResult> (int id, InvoiceC
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.InvoiceDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != InvoiceKinds.Sales && request.Kind != InvoiceKinds.Purchase) ||
-        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0)
+        request.PartyId <= 0 || request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب و حداقل یک ردیف معتبر الزامی است." });
     if (request.Lines.Any(x => string.IsNullOrWhiteSpace(x.Description) || x.Description.Trim().Length > 200 ||
-        x.Quantity <= 0 || x.UnitPrice < 0 || x.Discount < 0 || x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) || x.TaxRate < 0 || x.TaxRate > 100))
+        x.Quantity <= 0 || decimal.Round(x.Quantity, 3) != x.Quantity ||
+        x.UnitPrice < 0 || decimal.Round(x.UnitPrice, 2) != x.UnitPrice ||
+        x.Discount < 0 || decimal.Round(x.Discount, 2) != x.Discount ||
+        x.Discount > decimal.Round(x.Quantity * x.UnitPrice, 2) ||
+        x.TaxRate < 0 || decimal.Round(x.TaxRate, 2) != x.TaxRate || x.TaxRate > 100))
         return Results.BadRequest(new { message = "اطلاعات ردیف فاکتور معتبر نیست." });
     var db = services.GetRequiredService<AppDbContext>();
     var invoice = await db.Invoices.ForTenant(tenantId).Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
@@ -1258,6 +1293,7 @@ accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest req
     if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
     var number = request.Number?.Trim();
     if (string.IsNullOrWhiteSpace(number) || number.Length > 40 || request.PaymentDate == default ||
+        request.Notes?.Trim().Length > 500 ||
         (request.Kind != PaymentKinds.Receipt && request.Kind != PaymentKinds.Payment) ||
         request.PartyId <= 0 || request.CashAccountId <= 0 || request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
         return Results.BadRequest(new { message = "نوع، شماره، تاریخ، طرف حساب، حساب صندوق/بانک و مبلغ معتبر الزامی است." });
