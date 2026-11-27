@@ -5,10 +5,11 @@ namespace GhoghnoosAcc.Tests;
 public sealed class InvoiceDecimalPrecisionTests
 {
     [Theory]
-    [InlineData(12.123)]
-    [InlineData(0.001)]
-    public void Quantity_AllowsAtMostThreeDecimalPlaces(decimal value)
+    [InlineData("12.123")]
+    [InlineData("0.001")]
+    public void Quantity_AllowsAtMostThreeDecimalPlaces(string rawValue)
     {
+        var value = decimal.Parse(rawValue, System.Globalization.CultureInfo.InvariantCulture);
         Assert.False(InvoiceDecimalPrecision.HasScaleAbove(value, 3));
     }
 
@@ -19,11 +20,12 @@ public sealed class InvoiceDecimalPrecisionTests
     }
 
     [Theory]
-    [InlineData(12.12)]
-    [InlineData(0.01)]
-    [InlineData(0)]
-    public void MonetaryAndTaxValues_AllowAtMostTwoDecimalPlaces(decimal value)
+    [InlineData("12.12")]
+    [InlineData("0.01")]
+    [InlineData("0")]
+    public void MonetaryAndTaxValues_AllowAtMostTwoDecimalPlaces(string rawValue)
     {
+        var value = decimal.Parse(rawValue, System.Globalization.CultureInfo.InvariantCulture);
         Assert.False(InvoiceDecimalPrecision.HasScaleAbove(value, 2));
     }
 
