@@ -33,6 +33,7 @@
 </style>
 <script>
 (() => {
+ // Keep invoice-page JavaScript inside this script block; shared by both Sales and Purchase routes.
  const $=id=>document.getElementById(id), money=n=>Number(n||0).toLocaleString('fa-IR',{maximumFractionDigits:2}); let accounts=[],editingInvoiceId=null;
  const requestedKind=new URLSearchParams(window.location.search).get('kind');
  if(requestedKind==='Sales'||requestedKind==='Purchase') { $('kind').value=requestedKind; $('kind').disabled=true; }
