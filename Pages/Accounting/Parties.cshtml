@@ -79,7 +79,7 @@
             function hidePartyMenu() { popover.classList.remove('is-open'); moreButton.setAttribute('aria-expanded', 'false'); }
             moreButton.addEventListener('mouseenter', showPartyMenu);
             moreButton.addEventListener('focus', showPartyMenu);
-            moreButton.addEventListener('click', event => { event.stopPropagation(); popover.classList.contains('is-open') ? hidePartyMenu() : showPartyMenu(); });
+            moreButton.addEventListener('click', event => { event.stopPropagation(); if (!popover.classList.contains('is-open')) showPartyMenu(); });
             moreButton.addEventListener('mouseleave', () => { window.setTimeout(() => { if (!popover.matches(':hover') && !moreButton.matches(':hover') && document.activeElement !== moreButton) hidePartyMenu(); }, 120); });
             popover.addEventListener('mouseenter', showPartyMenu);
             popover.addEventListener('mouseleave', hidePartyMenu);
