@@ -180,8 +180,26 @@
         table.append(tbody); wrap.append(table); return wrap;
     }
     function addDocumentPrintButton(body, label, options) {
-        const button = el('button', 'document-print-action', label);
-        button.type = 'button';
+        const isInvoicePrint = label === 'چاپ فاکتور';
+        let button;
+        if (isInvoicePrint) {
+            const footer = $('documentModal').querySelector('.modal-footer');
+            button = footer.querySelector('.gh-print-modal-button');
+            if (button) {
+                button = button.cloneNode(true);
+                footer.querySelector('.gh-print-modal-button')?.replaceWith(button);
+            } else {
+                button = el('button', 'gh-print-modal-button', label);
+                button.type = 'button';
+                button.style.cssText = 'margin-inline-start:8px;border:0;border-radius:8px;padding:10px 14px;background:#2677c9;color:#fff;font:inherit;font-size:12px;cursor:pointer';
+                footer.append(button);
+            }
+            button.textContent = label;
+        } else {
+            button = el('button', 'document-print-action', label);
+            button.type = 'button';
+            body.append(button);
+        }
         button.addEventListener('click', () => {
             if (!window.GhoghnoosPrint || typeof window.GhoghnoosPrint.printDocument !== 'function') {
                 $('message').textContent = 'مرکز چاپ بارگذاری نشده است. صفحه را بازخوانی کنید.';
@@ -189,7 +207,6 @@
             }
             window.GhoghnoosPrint.printDocument(options);
         });
-        body.append(button);
     }
     async function openDocument(row, partyName) {
         const sourceType = row.sourceType || (String(row.kind || '').includes('Invoice') ? 'Invoice' : 'Payment');
