@@ -62,16 +62,13 @@
     const title = isPurchase ? 'فاکتور خرید' : 'فاکتور فروش';
 
     window.GhoghnoosPrint.printDocument({
+      theme: 'invoice-premium',
       title,
       subtitle: 'سامانه حسابداری و مدیریت مالی',
       number: data.number || summary.number || '—',
       metadata: [
-        { label: 'شماره فاکتور', value: data.number || summary.number || '—' },
         { label: 'تاریخ صدور', value: dateText },
-        { label: 'وضعیت', value: (data.status || summary.status) === 'Posted' ? 'ثبت نهایی' : 'پیش‌نویس' },
-        { label: isPurchase ? 'تأمین‌کننده' : 'مشتری', value: party },
-        { label: 'نوع فاکتور', value: title },
-        { label: 'واحد مبلغ', value: 'ریال' }
+        { label: isPurchase ? 'تأمین‌کننده' : 'مشتری', value: party }
       ],
       table: {
         headers: ['ردیف', 'شرح کالا یا خدمت', 'تعداد', 'قیمت واحد (ریال)', 'تخفیف (ریال)', 'مالیات', 'مبلغ نهایی (ریال)'],
