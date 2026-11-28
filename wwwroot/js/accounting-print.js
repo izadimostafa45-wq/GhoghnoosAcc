@@ -71,7 +71,7 @@
       '.invoice-premium .document-title{text-align:left;min-width:185px;padding:13px 16px;border:1px solid #222;border-radius:10px;position:relative}' +
       '.invoice-premium .document-title:before{content:"";position:absolute;top:-1px;right:-1px;left:-1px;height:4px;background:#111}' +
       '.invoice-premium .document-title h2{font-size:22px;line-height:1.5;margin:0 0 5px}' +
-      '.invoice-premium .document-title span{display:block;font-size:10px;padding-top:4px;border-top:1px solid #aaa}' +
+      '.invoice-premium .document-title span{display:block;font-size:12px;font-weight:700;padding-top:4px;border-top:1px solid #aaa}' +
       '.invoice-premium .meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:20px 0 22px;border:1px solid #777;border-radius:11px;overflow:hidden}' +
       '.invoice-premium .meta-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border:0;border-bottom:1px solid #ccc;background:#fff}' +
       '.invoice-premium .meta-item:nth-child(odd){border-left:1px solid #ccc}' +
