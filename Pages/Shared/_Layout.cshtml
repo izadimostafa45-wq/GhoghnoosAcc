@@ -122,6 +122,44 @@
         })();
         </script>
     }
+    <script>
+    (() => {
+        const printStyle = `*{box-sizing:border-box}body{margin:0;padding:18px;font-family:Tahoma,Arial,sans-serif;color:#20334b;font-size:12px;line-height:1.9;direction:rtl}h1,h2,h3{color:#174b7e}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #d9e2ec;padding:8px;text-align:right;vertical-align:top}th{background:#edf4fb}button,.no-print,[data-close-modal],.modal-close{display:none!important}input,select,textarea{border:0!important;background:transparent!important;color:inherit!important;font:inherit!important;box-shadow:none!important;padding:0!important}img{max-width:100%}@page{size:A4;margin:14mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+        function addPrintButton(dialog) {
+            if (!dialog || dialog.id === 'aiAssistantPanel' || dialog.querySelector('.gh-print-modal-button')) return;
+            const host = dialog.querySelector('.modal-footer, footer') || dialog.querySelector('.modal-header, header') || dialog;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'gh-print-modal-button';
+            button.textContent = 'چاپ / ذخیره PDF';
+            button.style.cssText = 'margin-inline-start:8px;border:0;border-radius:8px;padding:10px 14px;background:#2677c9;color:#fff;font:inherit;font-size:12px;cursor:pointer';
+            button.addEventListener('click', () => {
+                const title = dialog.querySelector('h1,h2,h3,[aria-labelledby]')?.textContent?.trim() || document.title;
+                const clone = dialog.cloneNode(true);
+                clone.querySelectorAll('.gh-print-modal-button,button,[data-close-modal]').forEach(node => node.remove());
+                const content = clone.querySelector('.modal-body') || clone.querySelector('.modal-content') || clone;
+                const win = window.open('', '_blank', 'width=1000,height=800');
+                if (!win) { alert('برای چاپ، اجازه بازشدن پنجره جدید (Pop-up) را در مرورگر فعال کنید.'); return; }
+                win.document.open();
+                win.document.write('<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>' +
+                    String(title).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) +
+                    '</title><style>' + printStyle + '</style></head><body><h2>' +
+                    String(title).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) +
+                    '</h2>' + content.innerHTML + '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),250));<\/script></body></html>');
+                win.document.close();
+            });
+            host.append(button);
+        }
+        function scan() {
+            document.querySelectorAll('[role="dialog"],.modal.show,.modal-panel').forEach(dialog => {
+                if (dialog.hidden || dialog.getAttribute('aria-hidden') === 'true' || getComputedStyle(dialog).display === 'none') return;
+                addPrintButton(dialog);
+            });
+        }
+        scan();
+        new MutationObserver(scan).observe(document.body, {subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','aria-hidden','style']});
+    })();
+    </script>
     <script src="~/js/persian-dates.js" asp-append-version="true"></script>
 </body>
 </html>
