@@ -271,7 +271,14 @@
                         headers: ['ردیف', 'شرح', 'تعداد', 'قیمت واحد (ریال)', 'تخفیف (ریال)', 'مالیات', 'مبلغ نهایی (ریال)'],
                         rows: lines
                     },
-                    totals: [{ label: 'مبلغ نهایی فاکتور (ریال)', value: money(data.total), emphasis: true }],
+                    totals: [
+                        { label: 'جمع پس از تخفیف (ریال)', value: money(subtotalAfterDiscount) },
+                        { label: 'مجموع تخفیف (ریال)', value: money(discountTotal) },
+                        { label: 'مالیات و عوارض (ریال)', value: money(taxTotal) },
+                        { label: 'مبلغ نهایی (ریال)', value: money(invoiceTotal), emphasis: true },
+                        { label: 'پرداخت‌شده (ریال)', value: money(paid) },
+                        { label: 'مانده حساب (ریال)', value: money(remaining), emphasis: true }
+                    ],
                     notes: data.notes || '',
                     signatures: ['مهر و امضای صادرکننده', 'امضا / تأیید طرف حساب']
                 });
