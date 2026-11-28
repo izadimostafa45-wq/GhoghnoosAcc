@@ -145,8 +145,9 @@
                     String(title).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) +
                     '</title><style>' + printStyle + '</style></head><body><h2>' +
                     String(title).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) +
-                    '</h2>' + content.innerHTML + '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),250));<\/script></body></html>');
+                    '</h2>' + content.innerHTML + '</body></html>');
                 win.document.close();
+                setTimeout(() => { if (!win.closed) { win.focus(); win.print(); } }, 350);
             });
             host.append(button);
         }
