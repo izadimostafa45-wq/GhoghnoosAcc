@@ -173,26 +173,35 @@
         table.append(tbody); wrap.append(table); return wrap;
     }
     async function openDocument(row, partyName) {
-        const isInvoice = row.sourceType === 'Invoice';
-        openModal(kindLabel(row.kind) + ' شماره ' + row.number);
+        const sourceType = row.sourceType || (String(row.kind || '').includes('Invoice') ? 'Invoice' : 'Payment');
+        const isInvoice = sourceType === 'Invoice';
+        const sourceId = Number(row.sourceId);
+        openModal(kindLabel(row.kind) + ' شماره ' + (row.number || '—'));
+        const body = $('modalBody');
+        body.style.color = '#20334b';
+        body.style.display = 'block';
         try {
-            const url = isInvoice ? '/api/accounting/invoices/' + row.sourceId : '/api/accounting/payments/' + row.sourceId;
-            const data = await jsonResponse(await fetch(url));
-            const body = $('modalBody'); body.replaceChildren();
+            if (!Number.isInteger(sourceId) || sourceId <= 0) {
+                throw new Error('شناسه سند در اطلاعات گردش حساب موجود نیست. صفحه را بازخوانی کنید.');
+            }
+            const url = (isInvoice ? '/api/accounting/invoices/' : '/api/accounting/payments/') + encodeURIComponent(sourceId);
+            const data = await jsonResponse(await fetch(url, { headers: { 'Accept': 'application/json' } }));
+            body.replaceChildren();
             if (isInvoice) {
                 const invoiceKind = data.kind === 'Sales' ? 'فروش' : 'خرید';
                 const meta = el('div', 'doc-meta');
                 meta.append(metaItem('طرف حساب', partyName), metaItem('شماره فاکتور', data.number), metaItem('تاریخ', dateText(data.invoiceDate)), metaItem('نوع', 'فاکتور ' + invoiceKind), metaItem('وضعیت', data.status === 'Posted' ? 'ثبت نهایی‌شده' : 'پیش‌نویس'), metaItem('جمع نهایی', money(data.total) + ' ریال'));
                 body.append(meta);
-                const lines = (data.lines || []).map((line, index) => {
+                const lines = (Array.isArray(data.lines) ? data.lines : []).map((line, index) => {
                     const gross = Math.round(Number(line.quantity || 0) * Number(line.unitPrice || 0) * 100) / 100;
                     const subtotal = gross - Number(line.discount || 0);
                     const tax = Math.round(subtotal * Number(line.taxRate || 0)) / 100;
-                    return [index + 1, line.description, money(line.quantity), money(line.unitPrice), money(line.discount), money(line.taxRate) + '٪', money(subtotal + tax)];
+                    return [index + 1, line.description || '—', money(line.quantity), money(line.unitPrice), money(line.discount), money(line.taxRate) + '٪', money(subtotal + tax)];
                 });
                 body.append(docTable(['ردیف', 'شرح', 'تعداد', 'قیمت واحد', 'تخفیف', 'مالیات', 'مبلغ نهایی'], lines));
                 const total = el('div', 'doc-total'); total.append(el('span', '', 'مبلغ نهایی فاکتور'), el('strong', '', money(data.total) + ' ریال')); body.append(total);
                 if (data.notes) body.append(el('div', 'doc-notes', 'توضیحات: ' + data.notes));
+                if (!lines.length) body.append(el('p', '', 'برای این فاکتور ردیف کالایی ثبت نشده است.'));
             } else {
                 const meta = el('div', 'doc-meta');
                 meta.append(metaItem('طرف حساب', data.partyName || partyName), metaItem('شماره سند دریافت/پرداخت', data.number), metaItem('تاریخ', dateText(data.paymentDate)), metaItem('نوع عملیات', data.kind === 'Receipt' ? 'دریافت از مشتری' : 'پرداخت به تأمین‌کننده'), metaItem('حساب صندوق / بانک', data.cashAccountTitle), metaItem('فاکتور مرتبط', data.invoiceNumber || '—'), metaItem('سند حسابداری', data.journalEntryNumber || '—'));
@@ -200,8 +209,9 @@
                 const total = el('div', 'doc-total'); total.append(el('span', '', data.kind === 'Receipt' ? 'مبلغ دریافتی' : 'مبلغ پرداختی'), el('strong', '', money(data.amount) + ' ریال')); body.append(total);
                 if (data.notes) body.append(el('div', 'doc-notes', 'شرح: ' + data.notes));
             }
+            if (!body.childElementCount) body.append(el('p', '', 'جزئیات این سند خالی است.'));
         } catch (error) {
-            $('modalBody').replaceChildren(el('p', '', error.message || 'جزئیات سند دریافت نشد.'));
+            body.replaceChildren(el('p', '', 'نمایش جزئیات سند ناموفق بود: ' + (error.message || 'خطای نامشخص')));
         }
     }
     $('applyFilter').addEventListener('click', loadStatement);
