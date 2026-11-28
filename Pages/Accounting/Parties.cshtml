@@ -84,7 +84,6 @@
             popover.addEventListener('mouseenter', showPartyMenu);
             popover.addEventListener('mouseleave', hidePartyMenu);
             moreWrap.addEventListener('keydown', event => { if (event.key === 'Escape') { hidePartyMenu(); moreButton.focus(); } });
-            document.addEventListener('click', event => { if (!moreWrap.contains(event.target) && !popover.contains(event.target)) hidePartyMenu(); });
             const status = document.createElement('td'), pill = document.createElement('span');
             pill.className = 'active-pill'; pill.textContent = party.isActive ? 'فعال' : 'غیرفعال';
             status.appendChild(pill); tr.appendChild(status);
@@ -115,6 +114,14 @@
         empty.hidden = filtered.length !== 0;
         if (!filtered.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 5; td.textContent = ' '; tr.appendChild(td); rows.appendChild(tr); }
     }
+    document.addEventListener('click', event => {
+        if (event.target instanceof Element && event.target.closest('.party-more-wrap')) return;
+        document.querySelectorAll('.party-more-popover.is-open').forEach(menu => {
+            menu.classList.remove('is-open');
+            const button = menu.parentElement?.querySelector('.party-more-button');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        });
+    });
     async function load() {
         count.textContent = 'در حال بارگذاری…';
         try {
