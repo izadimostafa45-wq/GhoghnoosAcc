@@ -124,7 +124,7 @@
     }
     <script>
     (() => {
-        const printStyle = `*{box-sizing:border-box}body{margin:0;padding:18px;font-family:Tahoma,Arial,sans-serif;color:#20334b;font-size:12px;line-height:1.9;direction:rtl}h1,h2,h3{color:#174b7e}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #d9e2ec;padding:8px;text-align:right;vertical-align:top}th{background:#edf4fb}button,.no-print,[data-close-modal],.modal-close{display:none!important}input,select,textarea{border:0!important;background:transparent!important;color:inherit!important;font:inherit!important;box-shadow:none!important;padding:0!important}img{max-width:100%}@@page{size:A4;margin:14mm}@@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+        const printStyle = `*{box-sizing:border-box}body{margin:0;padding:18px;font-family:Tahoma,Arial,sans-serif;color:#20334b;font-size:12px;line-height:1.9;direction:rtl}h1,h2,h3{color:#174b7e}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #d9e2ec;padding:8px;text-align:right;vertical-align:top}th{background:#edf4fb}button,.no-print,[data-close-modal],.modal-close{display:none!important}input,select,textarea{border:0!important;background:transparent!important;color:inherit!important;font:inherit!important;box-shadow:none!important;padding:0!important}img{max-width:100%}@page{size:A4;margin:14mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
         function addPrintButton(dialog) {
             if (!dialog || dialog.id === 'aiAssistantPanel' || dialog.querySelector('.gh-print-modal-button')) return;
             const host = dialog.querySelector('.modal-footer, footer') || dialog.querySelector('.modal-header, header') || dialog;
