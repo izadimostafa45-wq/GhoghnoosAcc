@@ -109,7 +109,7 @@
             const data = await jsonResponse(await fetch('/api/accounting/parties/' + partyId + '/statement' + (query.size ? '?' + query.toString() : '')));
             $('partyTitle').textContent = 'گردش حساب · ' + data.party.name;
             $('partySubtitle').textContent = [data.party.phone, data.party.address].filter(Boolean).join(' · ') || 'فاکتورهای ثبت‌نهایی‌شده و اسناد دریافت و پرداخت به ترتیب تاریخ.';
-            setBalance('overallBalance', data.overallBalance);
+            $('overallBalance').textContent = money(data.overallBalance) + ' ریال';
             $('overallSide').textContent = data.overallBalance > 0 ? 'بدهکار' : data.overallBalance < 0 ? 'بستانکار' : 'تسویه';
             $('overallSide').style.background = data.overallBalance > 0 ? '#b4533622' : data.overallBalance < 0 ? '#7de0b322' : '#ffffff20';
             setBalance('openingBalance', data.openingBalance);
