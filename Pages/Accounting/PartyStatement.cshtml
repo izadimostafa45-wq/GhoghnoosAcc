@@ -225,13 +225,10 @@
                     title: 'فاکتور ' + invoiceKind,
                     subtitle: 'سامانه حسابداری و مدیریت مالی',
                     number: data.number || row.number || '—',
+                    theme: 'invoice-premium',
                     metadata: [
                         { label: 'طرف حساب', value: partyName },
-                        { label: 'شماره فاکتور', value: data.number },
-                        { label: 'تاریخ صدور', value: dateText(data.invoiceDate) },
-                        { label: 'نوع فاکتور', value: 'فاکتور ' + invoiceKind },
-                        { label: 'وضعیت', value: data.status === 'Posted' ? 'ثبت نهایی‌شده' : 'پیش‌نویس' },
-                        { label: 'واحد مبلغ', value: 'ریال' }
+                        { label: 'تاریخ صدور', value: dateText(data.invoiceDate) }
                     ],
                     table: {
                         headers: ['ردیف', 'شرح', 'تعداد', 'قیمت واحد (ریال)', 'تخفیف (ریال)', 'مالیات', 'مبلغ نهایی (ریال)'],
@@ -271,7 +268,38 @@
             body.replaceChildren(el('p', '', 'نمایش جزئیات سند ناموفق بود: ' + (error.message || 'خطای نامشخص')));
         }
     }
-    $('printStatement').addEventListener('click', () => window.print());
+    $('printStatement').addEventListener('click', () => {
+        if (!window.GhoghnoosPrint || typeof window.GhoghnoosPrint.printDocument !== 'function') {
+            $('message').textContent = 'مرکز چاپ بارگذاری نشده است. صفحه را بازخوانی کنید.';
+            return;
+        }
+        const rows = Array.from($('statementRows').rows)
+            .filter(row => row.cells.length === 7)
+            .map(row => Array.from(row.cells).slice(0, 6).map(cell => cell.textContent.trim()));
+        window.GhoghnoosPrint.printDocument({
+            title: 'گردش حساب مشتری',
+            subtitle: $('partySubtitle').textContent || 'گزارش تفصیلی طرف حساب',
+            number: partyId,
+            metadata: [
+                { label: 'طرف حساب', value: $('partyTitle').textContent },
+                { label: 'از تاریخ', value: $('fromDate').value ? dateText($('fromDate').value) : 'ابتدای دوره' },
+                { label: 'تا تاریخ', value: $('toDate').value ? dateText($('toDate').value) : 'امروز' }
+            ],
+            table: {
+                headers: ['تاریخ', 'نوع سند', 'شرح', 'بدهکار (ریال)', 'بستانکار (ریال)', 'مانده پس از سند'],
+                rows
+            },
+            totals: [
+                { label: 'مانده ابتدای بازه', value: $('openingBalance').textContent },
+                { label: 'جمع بدهکار بازه', value: $('periodDebit').textContent },
+                { label: 'جمع بستانکار بازه', value: $('periodCredit').textContent },
+                { label: 'مانده پایان بازه', value: $('closingBalance').textContent, emphasis: true },
+                { label: 'مانده کل حساب', value: $('overallBalance').textContent + ' · ' + $('overallSide').textContent, emphasis: true }
+            ],
+            notes: 'تعداد اسناد در این بازه: ' + $('rowCount').textContent,
+            signatures: ['تهیه‌کننده گزارش', 'بررسی و تأیید']
+        });
+    });
     $('applyFilter').addEventListener('click', loadStatement);
     $('clearFilter').addEventListener('click', () => { $('fromDate').value = ''; $('toDate').value = ''; loadStatement(); });
     $('closeModal').addEventListener('click', closeModal);
