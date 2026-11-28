@@ -84,6 +84,7 @@
             popover.addEventListener('mouseenter', showPartyMenu);
             popover.addEventListener('mouseleave', hidePartyMenu);
             moreWrap.addEventListener('keydown', event => { if (event.key === 'Escape') { hidePartyMenu(); moreButton.focus(); } });
+            document.addEventListener('click', event => { if (!moreWrap.contains(event.target) && !popover.contains(event.target)) hidePartyMenu(); });
             const status = document.createElement('td'), pill = document.createElement('span');
             pill.className = 'active-pill'; pill.textContent = party.isActive ? 'فعال' : 'غیرفعال';
             status.appendChild(pill); tr.appendChild(status);
