@@ -22,8 +22,8 @@
     <section class="panel">
         <div class="section-heading"><div><h2>فیلتر گردش حساب</h2><p>برای مشاهده یک بازه مشخص، تاریخ شروع و پایان را انتخاب کنید.</p></div></div>
         <div class="filters">
-            <label>از تاریخ (شمسی)<input id="fromDate" type="text" inputmode="numeric" autocomplete="off" placeholder="۱۴۰۵/۰۸/۰۷" aria-label="از تاریخ شمسی، قالب سال/ماه/روز"></label>
-            <label>تا تاریخ (شمسی)<input id="toDate" type="text" inputmode="numeric" autocomplete="off" placeholder="۱۴۰۵/۰۸/۳۰" aria-label="تا تاریخ شمسی، قالب سال/ماه/روز"></label>
+            <label>از تاریخ<input id="fromDate" type="date"></label>
+            <label>تا تاریخ<input id="toDate" type="date"></label>
             <div class="filter-actions"><button id="applyFilter" type="button">اعمال فیلتر</button><button id="clearFilter" type="button" class="secondary">کل دوره</button></div>
         </div>
         <p id="message" role="status" aria-live="polite"></p>
@@ -69,23 +69,6 @@
         return money(n) + ' ریال · ' + (n > 0 ? 'بدهکار' : 'بستانکار');
     };
     const dateText = value => value ? new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value)) : '—';
-    const persianDigits = value => String(value).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-    function jalaliToIso(value) {
-        const raw = persianDigits(value.trim()).replace(/[.-]/g, '/');
-        if (!raw) return '';
-        const match = raw.match(/^(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})$/);
-        if (!match) throw new Error('تاریخ را به شکل شمسی سال/ماه/روز وارد کنید؛ مثال: ۱۴۰۵/۰۸/۰۷');
-        const target = match.slice(1).map(Number), fmt = new Intl.DateTimeFormat('en-u-ca-persian-nu-latn', {year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'});
-        const approxYear = target[0] + 621;
-        for (let t = Date.UTC(approxYear - 1, 0, 1); t < Date.UTC(approxYear + 2, 0, 1); t += 86400000) {
-            const parts = Object.fromEntries(fmt.formatToParts(new Date(t)).filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
-            if (parts.year === target[0] && parts.month === target[1] && parts.day === target[2]) {
-                const d = new Date(t);
-                return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');
-            }
-        }
-        throw new Error('تاریخ شمسی واردشده معتبر نیست.'); 
-    }
     async function jsonResponse(response) {
         const text = await response.text();
         let data = {};
@@ -122,75 +105,8 @@
         const query = new URLSearchParams();
         if ($('fromDate').value) query.set('from', $('fromDate').value);
         if ($('toDate').value) query.set('to', $('toDate').value);
-        try {
-            const data = await jsonResponse(await fetch('/api/accounting/parties/' + partyId + '/statement' + (query.size ? '?' + query.toString() : '')));
-            $('partyTitle').textContent = 'گردش حساب · ' + data.party.name;
-            $('partySubtitle').textContent = [data.party.phone, data.party.address].filter(Boolean).join(' · ') || 'فاکتورهای ثبت‌نهایی‌شده و اسناد دریافت و پرداخت به ترتیب تاریخ.';
-            $('overallBalance').textContent = money(data.overallBalance) + ' ریال';
-            $('overallSide').textContent = data.overallBalance > 0 ? 'بدهکار' : data.overallBalance < 0 ? 'بستانکار' : 'تسویه';
-            $('overallSide').style.background = data.overallBalance > 0 ? '#b4533622' : data.overallBalance < 0 ? '#7de0b322' : '#ffffff20';
-            setBalance('openingBalance', data.openingBalance);
-            $('periodDebit').textContent = money(data.periodDebit) + ' ریال';
-            $('periodCredit').textContent = money(data.periodCredit) + ' ریال';
-            setBalance('closingBalance', data.closingBalance);
-            const body = $('statementRows');
-            body.replaceChildren();
-            for (const row of data.transactions) {
-                const tr = document.createElement('tr');
-                tr.append(el('td', '', dateText(row.date)));
-                const kind = el('td');
-                kind.append(el('span', 'document-kind ' + kindClass(row.kind), kindLabel(row.kind)));
-                tr.append(kind, el('td', '', row.description || kindLabel(row.kind)));
-                tr.append(el('td', 'money-cell debit-value', row.debit ? money(row.debit) : '—'));
-                tr.append(el('td', 'money-cell credit-value', row.credit ? money(row.credit) : '—'));
-                tr.append(el('td', 'balance-value', signedBalance(row.balance)));
-                const actionCell = el('td');
-                const open = el('button', 'view-document', 'مشاهده سند');
-                open.type = 'button';
-                open.addEventListener('click', () => openDocument(row, data.party.name));
-                actionCell.append(open); tr.append(actionCell); body.append(tr);
-            }
-            if (!data.transactions.length) {
-                const tr = el('tr'), td = el('td', '', 'در این بازه سند ثبت‌نهایی‌شده‌ای برای این طرف حساب وجود ندارد.');
-                td.colSpan = 7; tr.append(td); body.append(tr);
-            }
-            $('rowCount').textContent = data.transactions.length.toLocaleString('fa-IR') + ' سند در این بازه';
-            $('message').textContent = 'گردش حساب با موفقیت به‌روزرسانی شد.';
-        } catch (error) {
-            $('message').textContent = error.message || 'خطا در دریافت گردش حساب.';
-            const body = $('statementRows'); body.replaceChildren();
-            const tr = el('tr'), td = el('td', '', 'اطلاعات گردش حساب دریافت نشد.'); td.colSpan = 7; tr.append(td); body.append(tr);
-        }
-    }
-    function openModal(title) {
-        lastFocused = document.activeElement;
-        $('modalTitle').textContent = title;
-        $('modalBody').replaceChildren(el('p', '', 'در حال دریافت جزئیات سند…'));
-        $('documentModal').hidden = false;
-        document.body.style.overflow = 'hidden';
-        $('closeModal').focus();
-    }
-    function closeModal() {
-        $('documentModal').hidden = true;
-        document.body.style.overflow = '';
-        if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
-    }
-    function docTable(headers, rows) {
-        const wrap = el('div', 'doc-table-wrap'), table = el('table', 'doc-table');
-        const thead = el('thead'), headRow = el('tr');
-        headers.forEach(x => headRow.append(el('th', '', x)));
-        thead.append(headRow); table.append(thead);
-        const tbody = el('tbody');
-        rows.forEach(values => {
-            const tr = el('tr');
-            values.forEach(value => tr.append(el('td', '', value)));
-            tbody.append(tr);
-        });
-        table.append(tbody); wrap.append(table); return wrap;
-    }
-    async function openDocument(row, partyName) {
-        const isInvoice = row.sourceType === 'Invoice';
-        openModal(kindLabel(row.kind) + ' شماره ' + row.number);
+        if ($('fromDate').value) query.set('from', $('fromDate').value);
+        if ($('toDate').value) query.set('to', $('toDate').value);
         try {
             const url = isInvoice ? '/api/accounting/invoices/' + row.sourceId : '/api/accounting/payments/' + row.sourceId;
             const data = await jsonResponse(await fetch(url));
