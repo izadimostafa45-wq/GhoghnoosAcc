@@ -662,6 +662,97 @@ accountingApi.MapPost("/parties/{id:int}/toggle-active", async Task<IResult> (in
     return Results.Ok(new { party.Id, party.IsActive, message = party.IsActive ? "شخص فعال شد." : "شخص غیرفعال شد." });
 }).RequireAuthorization("TenantWrite");
 
+
+accountingApi.MapGet("/parties/{id:int}/statement", async Task<IResult> (
+    int id, DateTime? from, DateTime? to, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString))
+        return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    if (from.HasValue && to.HasValue && from.Value.Date > to.Value.Date)
+        return Results.BadRequest(new { message = "تاریخ شروع نباید بعد از تاریخ پایان باشد." });
+
+    var db = services.GetRequiredService<AppDbContext>();
+    var party = await db.Parties.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.Id == id)
+        .Select(x => new { x.Id, x.Name, x.Phone, x.Address, x.IsActive })
+        .FirstOrDefaultAsync();
+    if (party is null) return Results.NotFound(new { message = "طرف حساب پیدا نشد." });
+
+    var invoices = await db.Invoices.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.PartyId == id && x.Status == InvoiceStatuses.Posted)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.InvoiceDate, x.Total, x.Notes })
+        .ToListAsync();
+    var payments = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.PartyId == id && x.JournalEntry != null && x.JournalEntry.IsPosted)
+        .Select(x => new { x.Id, x.Number, x.Kind, x.PaymentDate, x.Amount, x.Notes, x.InvoiceId })
+        .ToListAsync();
+
+    var transactions = new List<(DateTime Date, int Order, string Kind, string Number, string Description,
+        decimal Debit, decimal Credit, string SourceType, int SourceId, int? InvoiceId)>();
+    foreach (var invoice in invoices)
+    {
+        var sales = invoice.Kind == InvoiceKinds.Sales;
+        transactions.Add((invoice.InvoiceDate.Date, 0, sales ? "SalesInvoice" : "PurchaseInvoice",
+            invoice.Number, (sales ? "فاکتور فروش " : "فاکتور خرید ") + invoice.Number,
+            sales ? invoice.Total : 0m, sales ? 0m : invoice.Total, "Invoice", invoice.Id, invoice.Id));
+    }
+    foreach (var payment in payments)
+    {
+        var receipt = payment.Kind == PaymentKinds.Receipt;
+        transactions.Add((payment.PaymentDate.Date, 1, receipt ? "Receipt" : "Payment",
+            payment.Number, (receipt ? "دریافتی " : "پرداختی ") + payment.Number +
+                (string.IsNullOrWhiteSpace(payment.Notes) ? "" : " — " + payment.Notes),
+            receipt ? 0m : payment.Amount, receipt ? payment.Amount : 0m,
+            "Payment", payment.Id, payment.InvoiceId));
+    }
+
+    var ordered = transactions.OrderBy(x => x.Date).ThenBy(x => x.Order).ThenBy(x => x.Number, StringComparer.Ordinal).ToList();
+    var totalDebit = ordered.Sum(x => x.Debit);
+    var totalCredit = ordered.Sum(x => x.Credit);
+    var overallBalance = totalDebit - totalCredit;
+    var start = from.HasValue ? from.Value.Date : DateTime.MinValue.Date;
+    var end = to.HasValue ? to.Value.Date : DateTime.MaxValue.Date;
+    var openingBalance = from.HasValue
+        ? ordered.Where(x => x.Date < start).Sum(x => x.Debit - x.Credit)
+        : 0m;
+    var filtered = ordered.Where(x => (!from.HasValue || x.Date >= start) && (!to.HasValue || x.Date <= end)).ToList();
+    var runningBalance = openingBalance;
+    var rows = filtered.Select(x =>
+    {
+        runningBalance += x.Debit - x.Credit;
+        return new
+        {
+            date = x.Date,
+            kind = x.Kind,
+            number = x.Number,
+            description = x.Description,
+            debit = x.Debit,
+            credit = x.Credit,
+            balance = runningBalance,
+            sourceType = x.SourceType,
+            sourceId = x.SourceId,
+            invoiceId = x.InvoiceId
+        };
+    }).ToList();
+
+    return Results.Ok(new
+    {
+        party,
+        from = from?.Date,
+        to = to?.Date,
+        totalDebit,
+        totalCredit,
+        overallBalance,
+        overallBalanceSide = overallBalance > 0 ? "Debit" : overallBalance < 0 ? "Credit" : "Balanced",
+        openingBalance,
+        periodDebit = filtered.Sum(x => x.Debit),
+        periodCredit = filtered.Sum(x => x.Credit),
+        closingBalance = runningBalance,
+        transactions = rows
+    });
+});
+
 accountingApi.MapGet("/reports/party-balances", async Task<IResult> (
     DateTime? from,
     DateTime? to,
@@ -1250,6 +1341,29 @@ accountingApi.MapGet("/payments", async Task<IResult> (IServiceProvider services
             x.Amount, JournalEntryNumber = x.JournalEntry == null ? null : x.JournalEntry.DocumentNumber })
         .ToListAsync();
     return Results.Ok(rows);
+});
+
+
+accountingApi.MapGet("/payments/{id:int}", async Task<IResult> (int id, IServiceProvider services, ITenantContext tenantContext) =>
+{
+    if (tenantContext.TenantId is not Guid tenantId) return Results.Forbid();
+    if (string.IsNullOrWhiteSpace(connectionString)) return Results.Problem("PostgreSQL is not configured.", statusCode: 503);
+    var db = services.GetRequiredService<AppDbContext>();
+    var payment = await db.PaymentTransactions.AsNoTracking().ForTenant(tenantId)
+        .Where(x => x.Id == id && x.JournalEntry != null && x.JournalEntry.IsPosted)
+        .Select(x => new
+        {
+            x.Id, x.Number, x.Kind, x.PaymentDate, x.PartyId, PartyName = x.Party.Name,
+            CashAccountTitle = x.CashAccount.Title, x.InvoiceId,
+            InvoiceNumber = x.Invoice == null ? null : x.Invoice.Number,
+            InvoiceKind = x.Invoice == null ? null : x.Invoice.Kind,
+            x.Amount, x.Notes,
+            JournalEntryNumber = x.JournalEntry == null ? null : x.JournalEntry.DocumentNumber
+        })
+        .FirstOrDefaultAsync();
+    return payment is null
+        ? Results.NotFound(new { message = "سند دریافت/پرداخت پیدا نشد." })
+        : Results.Ok(payment);
 });
 
 accountingApi.MapPost("/payments", async Task<IResult> (PaymentCreateRequest request, IServiceProvider services, ITenantContext tenantContext) =>
